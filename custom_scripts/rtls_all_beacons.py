@@ -43,12 +43,13 @@ MAIN_BLE_BEACONS = [
     # 'B0D27817DA64',
     # 'B0D2781ACDC7',
     'B0D2781ACCCC',
+    'E4E1129BDDDD',
 ]
 
 # API endpoint
-# endpoint_url = "https://api.aneeshprasobhan.xyz/asset-tracking-api/data"
+endpoint_url = "https://api.aneeshprasobhan.xyz/asset-tracking-api/data"
 # For local testing
-endpoint_url = "http://localhost:3000/asset-tracking-api/data"
+# endpoint_url = "http://localhost:3000/asset-tracking-api/data"
 
 def create_json_data_for_all_beacons(hub):
         # current_timestamp = int((datetime.now() + timedelta(days=5)).timestamp() * 1000)

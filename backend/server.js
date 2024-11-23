@@ -17,6 +17,7 @@ const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
 const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
 const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
 const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
+const DELETE_ASSETS_ENDPOINT = '/asset-tracking-api/delete-assets';
 const BASE_ENDPOINT = '/asset-tracking-api';
 
 const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
@@ -542,6 +543,76 @@ app.post(NEW_ASSETS_ENDPOINT, (req, res) => {
                 console.error('Error processing assets:', error);
                 res.status(500).send({ error: 'Internal server error.' });
             });
+    });
+});
+
+app.delete(DELETE_ASSETS_ENDPOINT, (req, res) => {
+    const { macAddresses } = req.body;
+
+    if (!Array.isArray(macAddresses)) {
+        return res.status(400).send({ error: 'Invalid data format. Expected an array of MAC addresses.' });
+    }
+
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION;", (err) => {
+            if (err) {
+                console.error('Error starting transaction:', err);
+                return res.status(500).send({ error: 'Failed to start transaction.' });
+            }
+
+            const promises = macAddresses.map(macAddress => {
+                return new Promise((resolve, reject) => {
+                    // Delete from all relevant tables
+                    db.run("DELETE FROM beacons WHERE macAddress = ?", [macAddress], (err) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            db.run("DELETE FROM beacon_history WHERE macAddress = ?", [macAddress], (err) => {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    db.run("DELETE FROM time_tracking WHERE macAddress = ?", [macAddress], (err) => {
+                                        if (err) {
+                                            reject(err);
+                                        } else {
+                                            db.run("DELETE FROM assets WHERE macAddress = ?", [macAddress], (err) => {
+                                                if (err) {
+                                                    reject(err);
+                                                } else {
+                                                    console.log(`Deleted all entries for MAC address: ${macAddress}`);
+                                                    resolve(macAddress);
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+            });
+
+            Promise.all(promises)
+                .then(results => {
+                    db.run("COMMIT;", (err) => {
+                        if (err) {
+                            console.error('Error committing transaction:', err);
+                            res.status(500).send({ error: 'Failed to commit transaction.' });
+                        } else {
+                            res.status(200).send({ message: 'Assets deleted successfully.', deleted: results });
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error deleting assets:', error);
+                    db.run("ROLLBACK;", (rollbackErr) => {
+                        if (rollbackErr) {
+                            console.error('Error rolling back transaction:', rollbackErr);
+                        }
+                        res.status(500).send({ error: 'Failed to delete assets.' });
+                    });
+                });
+        });
     });
 });
 
