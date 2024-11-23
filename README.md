@@ -15,6 +15,13 @@ In project folder:
 
 -- To setup server and database, go to backend folder and run `npm install sqlite3` (if not installed already) and `node setupDatabase.js`
 -- To run the server, now run `node server.js`
+-- Modify the server.js file to change the database file path if needed. Here is the code:
+
+```javascript
+// let db = new sqlite3.Database('./rtls_demo.db');
+//Use the following line for docker and comment the above line
+let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
+```
 
 # Initial Frontend setup
 

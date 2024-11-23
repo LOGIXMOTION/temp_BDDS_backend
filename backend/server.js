@@ -1,7 +1,7 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-let db = new sqlite3.Database('./rtls_demo.db');
 
+let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
 // let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
 const { ZONES_CONFIG, MAIN_BLE_BEACONS, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
@@ -10,11 +10,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const cors = require('cors');
 
-const HUB_DATA_ENDPOINT = '/data';
-const ZONE_DATA_ENDPOINT = '/zones';
-const ASSET_DATA_ENDPOINT = '/assets';
-const RSSI_DATA_ENDPOINT = '/rssi-data';
-const TIME_TRACKING_ENDPOINT = '/time-tracking-data';
+const HUB_DATA_ENDPOINT = '/asset-tracking-api/data';
+const ZONE_DATA_ENDPOINT = '/asset-tracking-api/zones';
+const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
+const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
+const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
+const BASE_ENDPOINT = '/asset-tracking-api';
 
 const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
 
@@ -333,6 +334,7 @@ app.use(express.json());
 // Uncoment the follow for production and comment the above line
 // app.use('/asset-tracking-api', express.json());
 
+app.use(BASE_ENDPOINT, express.json());
 
 // FUNCTIONS AND CONSTANTS FOR RSSI DATA PROCESSING
 
@@ -475,20 +477,34 @@ app.get(ZONE_DATA_ENDPOINT, (req, res) => {
     // Helper function to get the beacon count and hub ID for a zone
     const getZoneData = (zone) => {
         return new Promise((resolve, reject) => {
-            // Fetch the count based on bestHubId for each zone
-            db.get("SELECT COUNT(b.macAddress) as count, h.id as hubId FROM beacons b JOIN hubs h ON b.bestHubId = h.id WHERE h.zone = ?", [zone], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    // Find the corresponding zone config
-                    const zoneConfig = ZONES_CONFIG.find(config => config.name === zone);
-                    resolve({
-                        name: zone,
-                        count: row ? row.count : 0,
-                        hubId: row ? row.hubId : (zoneConfig ? zoneConfig.hubId : null)
-                    });
-                }
-            });
+            if (zone === "Outside Range") {
+                // Special handling for "Outside Range"
+                db.get("SELECT COUNT(macAddress) as count FROM beacons WHERE bestHubId = 'Outside Range'", [], (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({
+                            name: zone,
+                            count: row ? row.count : 0,
+                            hubId: null // No hubId for "Outside Range"
+                        });
+                    }
+                });
+            } else {
+                // Handle regular zones
+                db.get("SELECT COUNT(b.macAddress) as count, h.id as hubId FROM beacons b JOIN hubs h ON b.bestHubId = h.id WHERE h.zone = ?", [zone], (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        const zoneConfig = ZONES_CONFIG.find(config => config.name === zone);
+                        resolve({
+                            name: zone,
+                            count: row ? row.count : 0,
+                            hubId: row ? row.hubId : (zoneConfig ? zoneConfig.hubId : null)
+                        });
+                    }
+                });
+            }
         });
     };
 
@@ -502,6 +518,7 @@ app.get(ZONE_DATA_ENDPOINT, (req, res) => {
             res.status(500).send({ error: 'Internal server error' });
         });
 });
+
 
 
 // New endpoint to get all asset data
