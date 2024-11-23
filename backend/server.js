@@ -1,10 +1,11 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 
-let db = new sqlite3.Database('./rtls_demo.db');
+// let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
-// let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
-const { ZONES_CONFIG, MAIN_BLE_BEACONS, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
+let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
+const { ZONES_CONFIG, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
+let MAIN_BLE_BEACONS = [];
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,7 @@ const ZONE_DATA_ENDPOINT = '/asset-tracking-api/zones';
 const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
 const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
 const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
+const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
 const BASE_ENDPOINT = '/asset-tracking-api';
 
 const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
@@ -28,14 +30,32 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 // When a beacon is outside range for 10 minutes, it is set to "Outside Range"
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
 
+// Call the function periodically to ensure MAIN_BLE_BEACONS stays updated
+setInterval(updateMainBleBeacons, 500); // Update every 500 ms
+updateMainBleBeacons();
+
 // Run the outside range check every minute
 setInterval(updateBeaconsAndCheckRange, 1000);
 
 // Run the updateTimeTracking function every x seconds
 setInterval(updateTimeTracking, 5000);
 
-   
-
+// Function to update MAIN_BLE_BEACONS from the database
+async function updateMainBleBeacons() {
+    try {
+        const query = "SELECT macAddress, assetName, humanFlag FROM assets";
+        db.all(query, [], (err, rows) => {
+            if (err) {
+                console.error("Error fetching assets:", err);
+                return;
+            }
+            MAIN_BLE_BEACONS = rows || []; // Update the global MAIN_BLE_BEACONS variable
+            // console.log("MAIN_BLE_BEACONS updated with", MAIN_BLE_BEACONS.length, "entries.");
+        });
+    } catch (error) {
+        console.error("Error updating MAIN_BLE_BEACONS:", error);
+    }
+}
 
 function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
@@ -468,6 +488,63 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
     }
 
 });
+
+// End point to get assets 
+app.post(NEW_ASSETS_ENDPOINT, (req, res) => {
+    const assets = req.body;
+
+    if (!Array.isArray(assets)) {
+        return res.status(400).send({ error: 'Invalid data format. Expected an array of assets.' });
+    }
+
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION;"); // Start a transaction
+
+        const promises = assets.map(asset => {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    `INSERT INTO assets (macAddress, assetName, humanFlag)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(macAddress)
+                    DO UPDATE SET assetName = excluded.assetName, humanFlag = excluded.humanFlag`,
+                    [asset.macAddress, asset.assetName, asset.humanFlag],
+                    (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        // Insert into beacons table
+                        db.run(
+                            `INSERT INTO beacons (macAddress, bestHubId, lastUpdatedTimestamp, assetName)
+                            VALUES (?, 'Outside Range', ?, ?)
+                            ON CONFLICT(macAddress)
+                            DO UPDATE SET bestHubId = 'Outside Range', lastUpdatedTimestamp = ?, assetName = ?`,
+                            [asset.macAddress, Date.now(), asset.assetName, Date.now(), asset.assetName],
+                            (err) => {
+                                if (err) {
+                                    return reject(err);
+                                }
+                                resolve({ macAddress: asset.macAddress, status: 'processed' });
+                            }
+                        );
+                    }
+                );
+            });
+        });
+
+        Promise.all(promises)
+            .then(results => {
+                db.run("COMMIT;"); // Commit the transaction
+                res.status(200).send({ message: 'Assets processed successfully.', results });
+            })
+            .catch(error => {
+                db.run("ROLLBACK;"); // Rollback the transaction
+                console.error('Error processing assets:', error);
+                res.status(500).send({ error: 'Internal server error.' });
+            });
+    });
+});
+
 
 
 // Endpoint to serve zone data

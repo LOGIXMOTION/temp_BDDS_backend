@@ -69,6 +69,17 @@ db.serialize(() => {
             hubs hb ON hb.id = b.bestHubId
         GROUP BY
             bh.macAddress, bh.hubId;`);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS assets (
+            macAddress TEXT PRIMARY KEY,
+            assetName TEXT,
+            humanFlag BOOLEAN
+        )
+    `);
+    
 });
+
+
 
 db.close();

@@ -8,25 +8,25 @@ from datetime import datetime, timedelta
 # Hubs configuration
 ZONES_CONFIG = [
     {'name': 'Lionels Room', 'hubId': 'hub869B3FE0', 'weight': 1},
-    {'name': 'Karins Room', 'hubId': 'hub869CB028', 'weight': 1},
-    {'name': 'Leonardo', 'hubId': 'hub55A9DF84', 'weight': 1},
-    {'name': 'Gabys Room', 'hubId': 'hub55AA7FC4', 'weight': 1},
-    {'name': 'Embedded', 'hubId': 'hub869B3540', 'weight': 1},
-    {'name': 'Zuse', 'hubId': 'hub869B3544', 'weight': 1},
-    {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
-    {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1}
+    # {'name': 'Karins Room', 'hubId': 'hub869CB028', 'weight': 1},
+    # {'name': 'Leonardo', 'hubId': 'hub55A9DF84', 'weight': 1},
+    # {'name': 'Gabys Room', 'hubId': 'hub55AA7FC4', 'weight': 1},
+    # {'name': 'Embedded', 'hubId': 'hub869B3540', 'weight': 1},
+    # {'name': 'Zuse', 'hubId': 'hub869B3544', 'weight': 1},
+    # {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
+    # {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1}
 ]
 
 # Main BLE beacons
 MAIN_BLE_BEACONS = [
-    'E4E1129BDC9A',
-    'E4E1129BDB69',
-    'E4E1129BDB75',
-    'E4E1129BDE9D',
-    'B09122E58408',
-    'F05ECD32E5F1',
-    'E4E1129C2810',
-    'E4E1129C2B71',
+    # 'E4E1129BDC9A',
+    # 'E4E1129BDB69',
+    # 'E4E1129BDB75',
+    # 'E4E1129BDE9D',
+    # 'B09122E58408',
+    # 'F05ECD32E5F1',
+    # 'E4E1129C2810',
+    # 'E4E1129C2B71',
     # 'B0D2781ACDD1',
     # 'B0D2781ACDA3',
     # 'B0D27817DC94',
@@ -41,7 +41,8 @@ MAIN_BLE_BEACONS = [
     # 'B0D2781ACDA7',
     # 'B0D27817DCA4',
     # 'B0D27817DA64',
-    # 'B0D2781ACDC7'
+    # 'B0D2781ACDC7',
+    'B0D2781ACCCC',
 ]
 
 # API endpoint
