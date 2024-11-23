@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="stylesheet" href="style_rtls.css">
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Tracking System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.0/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .logo-left {
+            display: flex;
+            align-items: center;
+        }
+        .logo-left span {
+            font-size: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .logo-left img, .logo-right img {
+            height: 40px;
+            width: auto;
+        }
+        .search-container {
+            margin: 20px 0;
+        }
+        #searchInput {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+        }
+        #searchButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #searchResult {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .zones-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .zone-box {
+            width: 300px;
+            height: 400px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            border-radius: 10px;
+            margin: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .zone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid white;
+        }
+        .zone-name {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .zone-count {
+            font-size: 20px;
+        }
+        .mac-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .mac-address {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .zone-box.highlight {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-left">
+            <span>blukii</span>
+            <img src="dist/assets/rtls_logo-f9ab01cc.png" alt="RTLS Logo">
+        </div>
+        <div class="logo-right">
+            <div>
+                <span class="rssi-message">Click on the RSSI logo for real-time RSSI from all Hubs</span>
+                <img src="dist/assets/rssi_fixed_hubs_button-1e54cbab.png" alt="RSSI Fixed Hubs" style="height: 45px; width: auto;">
+            </div>
+            <div>
+                <span class="time-message">Click on the clock to see your work times</span>
+                <!-- make this logo bigger  -->
+                <img src="dist/assets/time.png" alt="Time Tracking" id="timeTrackingButton" style="height: 70px; width: auto;">
+            </div>
+        </div>
+    </div>
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Enter name or MAC">
+        <button id="searchButton">Search</button>
+        <div id="searchResult"></div>
+    </div>
+    <div class="zones-container" id="zonesContainer"></div>
+
+
+    <!-- RSSI Popup -->
+    <div id="rssiPopup" style="display:none; position: fixed; top: 20%; left: 20%; background: white; border: 1px solid black; z-index: 1000; padding: 10px;">
+        <button onclick="closeRssiPopup()">Close</button>
+        <table id="rssiTable">
+            <thead>
+
+                <!-- <tr>
+                    <th rowspan="2">MAC Address</th>
+                    <th colspan="2">Embedded</th>
+                    <th rowspan="2">Assigned Zone</th>
+                </tr>
+                <tr>
+                    <th>Inst. RSSI</th>
+                    <th>Timestamp</th>
+                </tr> -->
+
+            </thead>
+            <tbody>
+                <!-- Data rows will go here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Time Tracking Popup -->
+    <div id="timeTrackingPopup" style="display:none; position: fixed; top: 20%; left: 20%; background: white; border: 1px solid black; z-index: 1000; padding: 10px;">
+        <div class="popup-header">
+            <button onclick="closeTimeTrackingPopup()">Close</button>
+            <div class="date-selector-container">
+                <select id="dateSelector"></select>
+                <span id="loadingIndicator" style="display: none;">Please wait</span>
+            </div>
+        </div>
+        <table id="timeTrackingTable">
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            <li>Time counter waits 10 minutes to stop a session after you leave all blukiiHubs' range. This is configurable. Note: The values till 31.08.2024 are not real.</li>
+        </ul>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.0/axios.min.js"></script>
+    <script src="time-tracking.js"></script>
+
+    <script>
+	
+		const API_BASE_URL = 'https://api.aneeshprasobhan.xyz/asset-tracking-api';
+		const API_ENDPOINTS = {
+			ZONES: `${API_BASE_URL}/zones`,
+			ASSETS: `${API_BASE_URL}/assets`,
+			RSSI_DATA: `${API_BASE_URL}/rssi-data`,
+			TIME_TRACKING: `${API_BASE_URL}/time-tracking-data`
+		};
+		
+        // Export API constants to make them globally available
+        window.API_ENDPOINTS = API_ENDPOINTS;
+		
+        const zonesContainer = document.getElementById('zonesContainer');
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const searchResult = document.getElementById('searchResult');
+
+        let assetData = {};
+        const zoneColors = [
+            '#3498db', // Blue (default)
+            //'#2ecc71', // Green
+			'#ff8000',
+            //'#ff7f50', // Soft Coral
+            '#3498db', 
+			'#ff8000', // Orange
+            '#3498db', // Hot Pink
+            '#ff8000', // Blue Violet
+            '#3498db',  // Medium Slate Blue
+			'#ff8000'
+        ];
+
+		function updateAssets() {
+			axios.get(API_ENDPOINTS.ZONES)
+				.then(zonesResponse => {
+					const zones = zonesResponse.data.zones;
+					return axios.get(API_ENDPOINTS.ASSETS)
+						.then(assetsResponse => {
+							assetData = assetsResponse.data;
+							createZoneBoxes(assetData, zones);
+						});
+				})
+				.catch(error => console.error('Error fetching data:', error));
+		}
+
+        function createZoneBoxes(assets, zones) {
+            zonesContainer.innerHTML = '';
+            const regularZones = zones.filter(zone => zone.name !== 'Outside Range');
+            const outsideRangeZone = zones.find(zone => zone.name === 'Outside Range');
+        
+            regularZones.forEach((zone, index) => {
+                const zoneBox = createZoneBox(zone, assets[zone.name] || [], zoneColors[index % zoneColors.length]);
+                zonesContainer.appendChild(zoneBox);
+            });
+        
+            if (outsideRangeZone) {
+                const outsideRangeBox = createZoneBox(outsideRangeZone, assets['Outside Range'] || [], 'black');
+                zonesContainer.appendChild(outsideRangeBox);
+            }
+        }
+        
+        function createZoneBox(zone, assets, backgroundColor) {
+            const zoneBox = document.createElement('div');
+            zoneBox.className = 'zone-box';
+            zoneBox.id = zone.name;
+            zoneBox.style.backgroundColor = backgroundColor;
+            zoneBox.innerHTML = `
+                <div class="zone-header">
+                    <div class="zone-name">${zone.name}</div>
+                    <div class="zone-count">${assets.length}</div>
+                </div>
+                <div class="mac-list">
+                    ${assets.map(asset => `
+                        <div class="mac-address">
+                            ${asset.macAddress}
+                            ${asset.assetName ? `<span class="asset-name">${asset.assetName}</span>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            return zoneBox;
+        }
+
+        // Search Asset Functionality
+        function searchAsset() {
+            const searchTerm = searchInput.value.toLowerCase();
+            let foundZone = null;
+            let foundAsset = null;
+        
+            for (const [zone, assets] of Object.entries(assetData)) {
+                foundAsset = assets.find(asset => 
+                    asset.macAddress.toLowerCase().includes(searchTerm) || 
+                    (asset.assetName && asset.assetName.toLowerCase().includes(searchTerm))
+                );
+                if (foundAsset) {
+                    foundZone = zone;
+                    break;
+                }
+            }
+        
+            if (foundZone && foundAsset) {
+                const displayName = foundAsset.assetName || foundAsset.macAddress;
+                searchResult.textContent = `${displayName} found in zone ${foundZone}`;
+                document.querySelectorAll('.zone-box').forEach(box => {
+                    box.classList.remove('highlight');
+                });
+                document.getElementById(foundZone).classList.add('highlight');
+            } else {
+                searchResult.textContent = 'Asset not found';
+                document.querySelectorAll('.zone-box').forEach(box => {
+                    box.classList.remove('highlight');
+                });
+            }
+        }
+        
+        searchButton.addEventListener('click', searchAsset);
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                searchAsset();
+            }
+        });
+
+
+
+
+
+        // Dynamically fetch zones and update headers
+        document.querySelector('.logo-right img').addEventListener('click', function() {
+            document.getElementById('rssiPopup').style.display = 'block';
+            fetchZones().then(zones => {
+                createTableHeader(zones);
+                fetchRssiData(zones); // Initial fetch with zones
+                window.rssiInterval = setInterval(() => fetchRssiData(zones), 1000); // Update every second
+            });
+        });
+        
+        function fetchZones() {
+            return axios.get(API_ENDPOINTS.ZONES)
+                .then(response => response.data.zones.map(zone => zone.name));
+        }
+        
+        function createTableHeader(zones) {
+            const thead = document.getElementById('rssiTable').getElementsByTagName('thead')[0];
+            thead.innerHTML = '';  // Clear any existing headers
+        
+            // Create the main header row
+            const mainHeaderRow = thead.insertRow();
+        
+            // Create MAC Address Header
+            let macHeader = mainHeaderRow.insertCell();
+            macHeader.innerHTML = 'MAC Address';
+            macHeader.rowSpan = 2;
+        
+            // Create headers for each zone
+            zones.forEach(zone => {
+                let header = mainHeaderRow.insertCell();
+                header.colSpan = 2; // Span over two columns (Inst. RSSI and Timestamp)
+                header.innerHTML = zone;
+            });
+        
+            // Create Assigned Zone Header
+            let assignedZoneHeader = mainHeaderRow.insertCell();
+            assignedZoneHeader.innerHTML = 'Algorithm Assigned Zone';
+            assignedZoneHeader.rowSpan = 2;
+        
+            // Create the subheader row for RSSI and Timestamp under each zone
+            const subHeaderRow = thead.insertRow();
+            zones.forEach(() => {
+                let rssiHeader = subHeaderRow.insertCell();
+                rssiHeader.innerHTML = 'Inst. RSSI';
+        
+                let timestampHeader = subHeaderRow.insertCell();
+                timestampHeader.innerHTML = 'Last Seen';
+            });
+        }
+        
+		
+		function fetchRssiData(zones) {
+			const timeOffset = 2 * 60 * 60 * 1000; // 2 hours in milliseconds for German timezone
+			const fiveSecondsAgo = Date.now() - 5000; // 5 seconds ago in milliseconds
+
+			axios.get(API_ENDPOINTS.RSSI_DATA)
+				.then(response => {
+					const data = response.data;
+					const tableBody = document.getElementById('rssiTable').getElementsByTagName('tbody')[0];
+					tableBody.innerHTML = ''; // Clear previous rows
+					Object.keys(data).forEach(macAddress => {
+						const row = tableBody.insertRow();
+						const macCell = row.insertCell();
+						macCell.innerHTML = `${macAddress}<br><span class="asset-name">${data[macAddress].assetName || ''}</span>`;
+						let assignedZone;
+						zones.forEach((zone, index) => {
+							const rssiCell = row.insertCell();
+							const lastSeenCell = row.insertCell();
+							if (data[macAddress][zone]) {
+								const lastSeenTimestamp = new Date(data[macAddress][zone].lastSeen).getTime();
+								const adjustedLastSeen = new Date(lastSeenTimestamp );
+
+								rssiCell.textContent = data[macAddress][zone].rssi;
+								lastSeenCell.textContent = adjustedLastSeen.toTimeString().split(' ')[0]; // Display adjusted time
+								
+								// Set background color based on timestamp
+								const bgColor = lastSeenTimestamp > fiveSecondsAgo ? 'lightgreen' : 'lightcoral';
+								rssiCell.style.backgroundColor = bgColor;
+								lastSeenCell.style.backgroundColor = bgColor;
+								
+								if (!assignedZone) {
+									assignedZone = data[macAddress][zone].assignedZone;
+								}
+							} else {
+								rssiCell.textContent = '--';
+								lastSeenCell.textContent = '--:--:--';
+								rssiCell.style.backgroundColor = 'lightcoral';
+								lastSeenCell.style.backgroundColor = 'lightcoral';
+							}
+							
+							if (index < zones.length - 1) {
+								lastSeenCell.style.borderRight = '2px solid #000';
+							}
+						});
+						const assignedZoneCell = row.insertCell();
+						assignedZoneCell.textContent = assignedZone || 'Unknown';
+					});
+				})
+				.catch(error => console.error('Failed to fetch RSSI data:', error));
+		}
+        
+        
+        function closeRssiPopup() {
+            clearInterval(window.rssiInterval);
+            document.getElementById('rssiPopup').style.display = 'none';
+        }
+        
+        
+        
+
+
+
+
+
+        
+        // Initial update and set interval for regular updates
+        updateAssets();
+        setInterval(updateAssets, 5000);
+		
+
+        // Time Tracking Popup
+        document.getElementById('timeTrackingButton').addEventListener('click', openTimeTrackingPopup);
+
+
+
+    </script>
+</body>
+</html>

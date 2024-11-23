@@ -1,0 +1,298 @@
+/* General body styling */
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.logo-left, .logo-right img {
+    display: flex;
+    align-items: center;
+    height: 40px;
+    width: auto;
+}
+
+.logo-right {
+    display: flex;
+    flex-direction: column; /* Stacks children vertically */
+    align-items: center; /* Aligns items horizontally at the center */
+}
+
+.logo-right div {
+    display: flex;
+    align-items: center; /* Center items vertically within each div */
+    justify-content: flex-end; /* Align items to the right end of the div */
+    width: 100%; /* Ensures divs use up full available width for proper alignment */
+}
+
+.logo-right span {
+    text-align: right; /* Aligns text to the right, closer to the image */
+    flex-grow: 1; /* Allows the text span to take up any extra space pushing the logo to the edge */
+}
+
+.logo-right div:first-child {
+    margin-bottom: 10px; /* Creates a gap between the first and second div */
+}
+
+.rssi-message {
+    font-size: 14px;
+    color: #666;
+    margin-right: 15px;
+    max-width: 200px;
+    text-align: right;
+}
+
+@media (max-width: 768px) {
+    .rssi-message {
+        display: none;
+    }
+}
+
+.search-container, #searchInput, #searchButton, #searchResult {
+    margin: 20px 0;
+}
+
+.zone-box {
+    width: 300px;
+    height: 400px;
+    background-color: #fff;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Table specific styles */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+}
+
+th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    border-top: none;
+}
+
+td {
+    background-color: #fff;
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+th:last-child, td:last-child {
+    border-right: none;
+}
+
+/* Thicker borders for room separation */
+th:nth-child(2n), td:nth-child(2n) {
+    border-right: 2px solid #999;
+}
+
+/* Hover effect */
+tbody tr:hover td {
+    background-color: #f5f5f5;
+}
+
+/* Close button styling */
+.close-btn {
+    padding: 8px 16px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.close-btn:hover {
+    background-color: #d32f2f;
+}
+
+/* RSSI Popup styling */
+#rssiPopup {
+    position: fixed;
+    top: 5%;
+    left: 50%;
+    /* transform  translate X -15, Y -20*/
+    transform: translate(-16%, -20%);
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 90%;
+    max-height: 90%;
+    overflow: auto;
+}
+
+/* Sticky header and first column */
+thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #f2f2f2;
+}
+
+td:first-child, th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+
+tbody td:first-child {
+    background-color: #f2f2f2;
+}
+
+thead th:first-child {
+    background-color: #f2f2f2;
+}
+
+/* Asset Name bold, 15px font, fff color alight to right  */
+.asset-name {
+    /* Bold and 15px font */
+    font-weight: bold;
+    font-size: 15px;
+    color: #fff;
+    margin-left: 20px;
+}
+
+
+/* rssiTable .asset-name
+should be word wrapped in the middle */
+#rssiTable .asset-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    color: #666;
+    margin-right: 50px;
+
+}
+
+
+/* Time Tracking Popup styling */
+#timeTrackingPopup {
+    position: fixed;
+    top: 5%;
+    left: 50%;
+    transform: translate(-5%, -10%);
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 90%;
+    max-height: 90%;
+    overflow: auto;
+}
+
+#timeTrackingTable {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+#timeTrackingTable th, #timeTrackingTable td {
+    padding: 10px;
+    text-align: left;
+    border: 1px solid #ddd;
+    font-weight: normal;
+}
+
+#timeTrackingTable th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+
+#timeTrackingTable .total-row td {
+    font-weight: bold;
+    background-color: #e6e6e6;
+}
+
+#timeTrackingTable .spacer-row td {
+    border-top: 2px solid #000;
+    padding: 0;
+    height: 2px;
+}
+
+.time-message {
+    font-size: 14px;
+    color: #666;
+    margin-right: 15px;
+    max-width: 200px;
+    text-align: right;
+}
+
+@media (max-width: 768px) {
+    .time-message {
+        display: none;
+    }
+}
+
+
+.popup-header {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.popup-header button {
+    margin-right: 20px; /* Adjust this value to increase/decrease space between button and date selector */
+}
+
+.date-selector-container {
+    display: flex;
+    align-items: center;
+}
+
+#dateSelector {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    padding: 5px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+#loadingIndicator {
+    margin-left: 10px;
+}
