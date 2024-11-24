@@ -69,11 +69,6 @@ db.serialize(() => {
             hubs hb ON hb.id = b.bestHubId
         GROUP BY
             bh.macAddress, bh.hubId;`);
-
-            
-            
 });
-
-
 
 db.close();

@@ -1,7 +1,11 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+
+// let db = new sqlite3.Database('./rtls_demo.db');
+//Use the following line for docker and comment the above line
 let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
-const { ZONES_CONFIG, MAIN_BLE_BEACONS, HUB_TO_ZONE, HUB_WEIGHTS } = require('./config');
+const { ZONES_CONFIG, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
+let MAIN_BLE_BEACONS = [];
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +16,8 @@ const ZONE_DATA_ENDPOINT = '/asset-tracking-api/zones';
 const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
 const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
 const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
+const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
+const DELETE_ASSETS_ENDPOINT = '/asset-tracking-api/delete-assets';
 const BASE_ENDPOINT = '/asset-tracking-api';
 
 const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
@@ -25,13 +31,32 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 // When a beacon is outside range for 10 minutes, it is set to "Outside Range"
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
 
+// Call the function periodically to ensure MAIN_BLE_BEACONS stays updated
+setInterval(updateMainBleBeacons, 500); // Update every 500 ms
+updateMainBleBeacons();
+
 // Run the outside range check every minute
 setInterval(updateBeaconsAndCheckRange, 1000);
 
 // Run the updateTimeTracking function every x seconds
 setInterval(updateTimeTracking, 5000);
 
-
+// Function to update MAIN_BLE_BEACONS from the database
+async function updateMainBleBeacons() {
+    try {
+        const query = "SELECT macAddress, assetName, humanFlag FROM assets";
+        db.all(query, [], (err, rows) => {
+            if (err) {
+                console.error("Error fetching assets:", err);
+                return;
+            }
+            MAIN_BLE_BEACONS = rows || []; // Update the global MAIN_BLE_BEACONS variable
+            // console.log("MAIN_BLE_BEACONS updated with", MAIN_BLE_BEACONS.length, "entries.");
+        });
+    } catch (error) {
+        console.error("Error updating MAIN_BLE_BEACONS:", error);
+    }
+}
 
 function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
@@ -117,6 +142,7 @@ function getDateDifference(dateStr1, dateStr2) {
     
     return diffInDays;
 }
+
 
 
 function updateTimeTracking() {
@@ -229,7 +255,7 @@ function updateTimeTracking() {
                         if (timeTrackingRow) {
                             console.log("Found ongoing session for active beacon:", beacon.macAddress);
 
-                            if (lastUpdatedGermanDate === currentGermanDate) {
+                            if ((lastUpdatedGermanDate === currentGermanDate) && (timeTrackingRow.date === currentGermanDate)) {
                                 console.log("lastUpdatedGermanDate =", lastUpdatedGermanDate, "currentGermanDate =", currentGermanDate);
                                 console.log("Updating ongoing entry for beacon:", beacon.macAddress);
                                 const timeCounter = formatTimeCounter(currentTime - timeTrackingRow.startTimeSection);
@@ -241,7 +267,7 @@ function updateTimeTracking() {
                                 });
                             }
                             // For closing an existing active beacon when the day changes
-                            else if (lastUpdatedGermanDate != currentGermanDate && timeTrackingRow.date != currentGermanDate) {
+                            else if (timeTrackingRow.date != currentGermanDate) {
                                 // Close the old entry
                                 console.log("Closing out entry for previous day for beacon:", beacon.macAddress);
                 
@@ -282,7 +308,7 @@ function updateTimeTracking() {
                                 });
                             } 
                             // Creating a new entry for the current day for yesterdays active beacon
-                            else if (timeTrackingRow.date == currentGermanDate && timeTrackingRow.stopTimeSection) {
+                            else if ((timeTrackingRow.date == currentGermanDate) && timeTrackingRow.stopTimeSection) {
                                 // Create a new entry for today
                                 console.log("Creating new entry for current day for beacon:", beacon.macAddress);
                                 db.run("INSERT INTO time_tracking (date, macAddress, assetName, startTimeSection, timeCounter) VALUES (?, ?, ?, ?, '00:00:00')", 
@@ -326,8 +352,12 @@ function updateTimeTracking() {
 app.use(cors());
 
 app.use(express.json());
+// Uncoment the follow for production and comment the above line
+// app.use('/asset-tracking-api', express.json());
 
 app.use(BASE_ENDPOINT, express.json());
+
+// FUNCTIONS AND CONSTANTS FOR RSSI DATA PROCESSING
 
 
 // Create a cache to store the last known RSSI values
@@ -460,6 +490,133 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
 
 });
 
+// End point to insert new assets 
+app.post(NEW_ASSETS_ENDPOINT, (req, res) => {
+    const assets = req.body;
+
+    if (!Array.isArray(assets)) {
+        return res.status(400).send({ error: 'Invalid data format. Expected an array of assets.' });
+    }
+
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION;"); // Start a transaction
+
+        const promises = assets.map(asset => {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    `INSERT INTO assets (macAddress, assetName, humanFlag)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(macAddress)
+                    DO UPDATE SET assetName = excluded.assetName, humanFlag = excluded.humanFlag`,
+                    [asset.macAddress, asset.assetName, asset.humanFlag],
+                    (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        // Insert into beacons table
+                        db.run(
+                            `INSERT INTO beacons (macAddress, bestHubId, lastUpdatedTimestamp, assetName)
+                            VALUES (?, 'Outside Range', ?, ?)
+                            ON CONFLICT(macAddress)
+                            DO UPDATE SET bestHubId = 'Outside Range', lastUpdatedTimestamp = ?, assetName = ?`,
+                            [asset.macAddress, Date.now(), asset.assetName, Date.now(), asset.assetName],
+                            (err) => {
+                                if (err) {
+                                    return reject(err);
+                                }
+                                resolve({ macAddress: asset.macAddress, status: 'processed' });
+                            }
+                        );
+                    }
+                );
+            });
+        });
+
+        Promise.all(promises)
+            .then(results => {
+                db.run("COMMIT;"); // Commit the transaction
+                res.status(200).send({ message: 'Assets processed successfully.', results });
+            })
+            .catch(error => {
+                db.run("ROLLBACK;"); // Rollback the transaction
+                console.error('Error processing assets:', error);
+                res.status(500).send({ error: 'Internal server error.' });
+            });
+    });
+});
+
+app.delete(DELETE_ASSETS_ENDPOINT, (req, res) => {
+    const { macAddresses } = req.body;
+
+    if (!Array.isArray(macAddresses)) {
+        return res.status(400).send({ error: 'Invalid data format. Expected an array of MAC addresses.' });
+    }
+
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION;", (err) => {
+            if (err) {
+                console.error('Error starting transaction:', err);
+                return res.status(500).send({ error: 'Failed to start transaction.' });
+            }
+
+            const promises = macAddresses.map(macAddress => {
+                return new Promise((resolve, reject) => {
+                    // Delete from all relevant tables
+                    db.run("DELETE FROM beacons WHERE macAddress = ?", [macAddress], (err) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            db.run("DELETE FROM beacon_history WHERE macAddress = ?", [macAddress], (err) => {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    db.run("DELETE FROM time_tracking WHERE macAddress = ?", [macAddress], (err) => {
+                                        if (err) {
+                                            reject(err);
+                                        } else {
+                                            db.run("DELETE FROM assets WHERE macAddress = ?", [macAddress], (err) => {
+                                                if (err) {
+                                                    reject(err);
+                                                } else {
+                                                    console.log(`Deleted all entries for MAC address: ${macAddress}`);
+                                                    resolve(macAddress);
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+            });
+
+            Promise.all(promises)
+                .then(results => {
+                    db.run("COMMIT;", (err) => {
+                        if (err) {
+                            console.error('Error committing transaction:', err);
+                            res.status(500).send({ error: 'Failed to commit transaction.' });
+                        } else {
+                            res.status(200).send({ message: 'Assets deleted successfully.', deleted: results });
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error deleting assets:', error);
+                    db.run("ROLLBACK;", (rollbackErr) => {
+                        if (rollbackErr) {
+                            console.error('Error rolling back transaction:', rollbackErr);
+                        }
+                        res.status(500).send({ error: 'Failed to delete assets.' });
+                    });
+                });
+        });
+    });
+});
+
+
 
 // Endpoint to serve zone data
 app.get(ZONE_DATA_ENDPOINT, (req, res) => {
@@ -468,20 +625,34 @@ app.get(ZONE_DATA_ENDPOINT, (req, res) => {
     // Helper function to get the beacon count and hub ID for a zone
     const getZoneData = (zone) => {
         return new Promise((resolve, reject) => {
-            // Fetch the count based on bestHubId for each zone
-            db.get("SELECT COUNT(b.macAddress) as count, h.id as hubId FROM beacons b JOIN hubs h ON b.bestHubId = h.id WHERE h.zone = ?", [zone], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    // Find the corresponding zone config
-                    const zoneConfig = ZONES_CONFIG.find(config => config.name === zone);
-                    resolve({
-                        name: zone,
-                        count: row ? row.count : 0,
-                        hubId: row ? row.hubId : (zoneConfig ? zoneConfig.hubId : null)
-                    });
-                }
-            });
+            if (zone === "Outside Range") {
+                // Special handling for "Outside Range"
+                db.get("SELECT COUNT(macAddress) as count FROM beacons WHERE bestHubId = 'Outside Range'", [], (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({
+                            name: zone,
+                            count: row ? row.count : 0,
+                            hubId: null // No hubId for "Outside Range"
+                        });
+                    }
+                });
+            } else {
+                // Handle regular zones
+                db.get("SELECT COUNT(b.macAddress) as count, h.id as hubId FROM beacons b JOIN hubs h ON b.bestHubId = h.id WHERE h.zone = ?", [zone], (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        const zoneConfig = ZONES_CONFIG.find(config => config.name === zone);
+                        resolve({
+                            name: zone,
+                            count: row ? row.count : 0,
+                            hubId: row ? row.hubId : (zoneConfig ? zoneConfig.hubId : null)
+                        });
+                    }
+                });
+            }
         });
     };
 
@@ -497,9 +668,27 @@ app.get(ZONE_DATA_ENDPOINT, (req, res) => {
 });
 
 
-// New endpoint to get all asset data
+
+// New endpoint to get all asset data including humanFlag
+
 app.get(ASSET_DATA_ENDPOINT, (req, res) => {
-    db.all("SELECT b.macAddress, b.bestHubId, b.assetName, CASE WHEN b.bestHubId = 'Outside Range' THEN 'Outside Range' ELSE h.zone END as zone FROM beacons b LEFT JOIN hubs h ON b.bestHubId = h.id", [], (err, rows) => {
+    const query = `
+        SELECT 
+            b.macAddress, 
+            b.bestHubId, 
+            b.assetName, 
+            CASE 
+                WHEN b.bestHubId = 'Outside Range' THEN 'Outside Range' 
+                ELSE h.zone 
+            END as zone,
+            a.humanFlag
+        FROM 
+            beacons b 
+            LEFT JOIN hubs h ON b.bestHubId = h.id
+            LEFT JOIN assets a ON b.macAddress = a.macAddress
+    `;
+
+    db.all(query, [], (err, rows) => {
         if (err) {
             console.error(err);
             res.status(500).json({ error: 'Internal server error' });
@@ -507,21 +696,24 @@ app.get(ASSET_DATA_ENDPOINT, (req, res) => {
         }
 
         const assetsByZone = {};
-        
+
         rows.forEach(row => {
             const zone = row.zone || 'Unknown';
             if (!assetsByZone[zone]) {
                 assetsByZone[zone] = [];
             }
+
             assetsByZone[zone].push({
                 macAddress: row.macAddress,
-                assetName: row.assetName || null
+                assetName: row.assetName || null,
+                humanFlag: row.humanFlag  // This will be 1 or 0 based on the assets table
             });
         });
 
         res.json(assetsByZone);
     });
 });
+
 
 
 // Endpoint to get RSSI data for all beacons across all hubs
@@ -613,7 +805,7 @@ app.get(TIME_TRACKING_ENDPOINT, (req, res) => {
 
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 
 
   // Run cleanup every hour
