@@ -490,7 +490,7 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
 
 });
 
-// End point to get assets 
+// End point to insert new assets 
 app.post(NEW_ASSETS_ENDPOINT, (req, res) => {
     const assets = req.body;
 
@@ -669,9 +669,26 @@ app.get(ZONE_DATA_ENDPOINT, (req, res) => {
 
 
 
-// New endpoint to get all asset data
+// New endpoint to get all asset data including humanFlag
+
 app.get(ASSET_DATA_ENDPOINT, (req, res) => {
-    db.all("SELECT b.macAddress, b.bestHubId, b.assetName, CASE WHEN b.bestHubId = 'Outside Range' THEN 'Outside Range' ELSE h.zone END as zone FROM beacons b LEFT JOIN hubs h ON b.bestHubId = h.id", [], (err, rows) => {
+    const query = `
+        SELECT 
+            b.macAddress, 
+            b.bestHubId, 
+            b.assetName, 
+            CASE 
+                WHEN b.bestHubId = 'Outside Range' THEN 'Outside Range' 
+                ELSE h.zone 
+            END as zone,
+            a.humanFlag
+        FROM 
+            beacons b 
+            LEFT JOIN hubs h ON b.bestHubId = h.id
+            LEFT JOIN assets a ON b.macAddress = a.macAddress
+    `;
+
+    db.all(query, [], (err, rows) => {
         if (err) {
             console.error(err);
             res.status(500).json({ error: 'Internal server error' });
@@ -679,21 +696,24 @@ app.get(ASSET_DATA_ENDPOINT, (req, res) => {
         }
 
         const assetsByZone = {};
-        
+
         rows.forEach(row => {
             const zone = row.zone || 'Unknown';
             if (!assetsByZone[zone]) {
                 assetsByZone[zone] = [];
             }
+
             assetsByZone[zone].push({
                 macAddress: row.macAddress,
-                assetName: row.assetName || null
+                assetName: row.assetName || null,
+                humanFlag: row.humanFlag  // This will be 1 or 0 based on the assets table
             });
         });
 
         res.json(assetsByZone);
     });
 });
+
 
 
 // Endpoint to get RSSI data for all beacons across all hubs
