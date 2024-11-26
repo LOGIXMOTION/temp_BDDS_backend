@@ -1,3 +1,4 @@
+// setupDatabase.js
 const sqlite3 = require('sqlite3').verbose();
 
 // Create a new database file
@@ -8,148 +9,108 @@ let db = new sqlite3.Database('./rtls_demo.db', (err) => {
     console.log('Connected to the SQLite database.');
 });
 
-// Create tables for hubs, beacons, and beacon history
 db.serialize(() => {
-    // First drop the view since it depends on the hubs table
-    db.run("DROP VIEW IF EXISTS v_beacon_latest_rssi", (err) => {
-        if (err) console.error('Error dropping view:', err.message);
-    });
+    // Drop the view first since it depends on other tables
+    db.run("DROP VIEW IF EXISTS v_beacon_latest_rssi");
 
-    // Create new hubs table
+    // Create zones table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS zones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            vertices TEXT,
+            color TEXT,
+            opacity REAL,
+            created_at INTEGER DEFAULT (strftime('%s','now')),
+            updated_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+    `);
+
+    // Modify hubs table to reference zones
     db.run(`
         CREATE TABLE IF NOT EXISTS hubs_new (
             id TEXT PRIMARY KEY,
-            zone TEXT,
+            zone_id INTEGER,
             latitude REAL,
             longitude REAL,
             height REAL,
             weight REAL,
             orientation_angle REAL,
             tilt_angle REAL,
-            zone_vertices TEXT,
-            zone_color TEXT,
-            zone_opacity REAL,
             created_at INTEGER DEFAULT (strftime('%s','now')),
-            updated_at INTEGER DEFAULT (strftime('%s','now'))
+            updated_at INTEGER DEFAULT (strftime('%s','now')),
+            FOREIGN KEY (zone_id) REFERENCES zones(id)
         )
-    `, (err) => {
-        if (err) console.error('Error creating hubs_new:', err.message);
-    });
+    `);
 
-    // Copy data from old hubs table if it exists
+    // Migrate existing data
     db.run(`
-        INSERT OR IGNORE INTO hubs_new (id, zone)
-        SELECT id, zone FROM hubs WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='hubs')
-    `, (err) => {
-        if (err) console.error('Error copying data:', err.message);
-    });
+        INSERT INTO zones (name)
+        SELECT DISTINCT zone FROM hubs WHERE zone != 'Outside Range'
+    `);
 
-    // Drop old hubs table and rename new one
-    db.run(`DROP TABLE IF EXISTS hubs`, (err) => {
-        if (err) console.error('Error dropping old table:', err.message);
-    });
+    db.run(`
+        INSERT INTO hubs_new (id, zone_id)
+        SELECT h.id, z.id 
+        FROM hubs h
+        JOIN zones z ON h.zone = z.name
+    `);
 
-    db.run(`ALTER TABLE hubs_new RENAME TO hubs`, (err) => {
-        if (err) console.error('Error renaming table:', err.message);
-    });
+    // Drop old table and rename new one
+    db.run("DROP TABLE IF EXISTS hubs");
+    db.run("ALTER TABLE hubs_new RENAME TO hubs");
 
-    // Create other necessary tables
-    db.run(`CREATE TABLE IF NOT EXISTS beacons (
-        macAddress TEXT PRIMARY KEY, 
-        bestHubId TEXT, 
-        lastUpdatedTimestamp INTEGER, 
-        assetName TEXT
-    )`, (err) => {
-        if (err) console.error('Error creating beacons table:', err.message);
-    });
+    // Create beacon_zones table to track best zone for each beacon
+    db.run(`
+        CREATE TABLE IF NOT EXISTS beacon_zones (
+            macAddress TEXT PRIMARY KEY,
+            zone_id INTEGER,
+            last_updated INTEGER,
+            FOREIGN KEY (zone_id) REFERENCES zones(id)
+        )
+    `);
 
-    db.run(`CREATE TABLE IF NOT EXISTS beacon_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        macAddress TEXT, 
-        rssi INTEGER, 
-        hubId TEXT, 
-        timestamp INTEGER
-    )`, (err) => {
-        if (err) console.error('Error creating beacon_history table:', err.message);
-    });
+    // Migrate existing beacon assignments
+    db.run(`
+        INSERT INTO beacon_zones (macAddress, zone_id, last_updated)
+        SELECT b.macAddress, z.id, b.lastUpdatedTimestamp
+        FROM beacons b
+        JOIN hubs h ON b.bestHubId = h.id
+        JOIN zones z ON h.zone_id = z.id
+        WHERE b.bestHubId != 'Outside Range'
+    `);
 
-    db.run(`CREATE TABLE IF NOT EXISTS assets (
-        macAddress TEXT PRIMARY KEY,
-        assetName TEXT,
-        humanFlag BOOLEAN
-    )`, (err) => {
-        if (err) console.error('Error creating assets table:', err.message);
-    });
+    // Update indexes
+    db.run("CREATE INDEX IF NOT EXISTS idx_hubs_zone_id ON hubs(zone_id)");
+    db.run("CREATE INDEX IF NOT EXISTS idx_beacon_zones_zone_id ON beacon_zones(zone_id)");
 
-    db.run(`CREATE TABLE IF NOT EXISTS time_tracking (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT,
-        macAddress TEXT,
-        assetName TEXT,
-        startTimeSection INTEGER,
-        stopTimeSection INTEGER,
-        timeCounter TEXT,
-        UNIQUE(date, macAddress, startTimeSection)
-    )`, (err) => {
-        if (err) console.error('Error creating time_tracking table:', err.message);
-    });
-
-    // Create indexes
-    db.run("CREATE INDEX IF NOT EXISTS idx_mac_hub ON beacon_history(macAddress, hubId)", (err) => {
-        if (err) console.error('Error creating idx_mac_hub:', err.message);
-    });
-
-    db.run("CREATE INDEX IF NOT EXISTS idx_timestamp ON beacon_history(timestamp)", (err) => {
-        if (err) console.error('Error creating idx_timestamp:', err.message);
-    });
-
-    db.run("CREATE INDEX IF NOT EXISTS idx_time_tracking_date_mac ON time_tracking(date, macAddress)", (err) => {
-        if (err) console.error('Error creating idx_time_tracking_date_mac:', err.message);
-    });
-
-    db.run("CREATE INDEX IF NOT EXISTS idx_time_tracking_order ON time_tracking(date DESC, macAddress, startTimeSection)", (err) => {
-        if (err) console.error('Error creating idx_time_tracking_order:', err.message);
-    });
-
-    db.run("CREATE INDEX IF NOT EXISTS idx_hubs_zone ON hubs(zone)", (err) => {
-        if (err) console.error('Error creating idx_hubs_zone:', err.message);
-    });
-
-    db.run("CREATE INDEX IF NOT EXISTS idx_hubs_updated ON hubs(updated_at)", (err) => {
-        if (err) console.error('Error creating idx_hubs_updated:', err.message);
-    });
-
-    // Recreate the view after all tables are set up
-    db.run(`CREATE VIEW IF NOT EXISTS v_beacon_latest_rssi AS
-        SELECT
-            bh.macAddress,
-            b.assetName,
-            bh.hubId,
-            h.zone AS currentZone,
-            b.bestHubId,
-            hb.zone AS assignedZone,
-            bh.rssi,
-            MAX(bh.timestamp) as lastSeen
-        FROM
-            beacon_history bh
-        JOIN
-            hubs h ON bh.hubId = h.id
-        JOIN
-            beacons b ON b.macAddress = bh.macAddress
-        LEFT JOIN
-            hubs hb ON hb.id = b.bestHubId
-        GROUP BY
-            bh.macAddress, bh.hubId;
-    `, (err) => {
-        if (err) console.error('Error creating view:', err.message);
-        else console.log('Database setup completed successfully.');
-    });
+    // Recreate the view with zone-based approach
+    db.run(`
+        CREATE VIEW IF NOT EXISTS v_beacon_latest_rssi AS
+            SELECT
+                bh.macAddress,
+                b.assetName,
+                bh.hubId,
+                z.name AS currentZone,
+                bz.zone_id AS bestZoneId,
+                zb.name AS assignedZone,
+                bh.rssi,
+                MAX(bh.timestamp) as lastSeen
+            FROM
+                beacon_history bh
+            JOIN
+                hubs h ON bh.hubId = h.id
+            JOIN
+                zones z ON h.zone_id = z.id
+            JOIN
+                beacons b ON b.macAddress = bh.macAddress
+            LEFT JOIN
+                beacon_zones bz ON bh.macAddress = bz.macAddress
+            LEFT JOIN
+                zones zb ON bz.zone_id = zb.id
+            GROUP BY
+                bh.macAddress, bh.hubId;
+    `);
 });
 
-// Close the database connection
-db.close((err) => {
-    if (err) {
-        console.error(err.message);
-    }
-    console.log('Closed the database connection.');
-});
+db.close();
