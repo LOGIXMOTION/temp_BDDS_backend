@@ -10,11 +10,12 @@ ZONES_CONFIG = [
     {'name': 'Lionels Room', 'hubId': 'hub869B3FE0', 'weight': 1},
     {'name': 'Karins Room', 'hubId': 'hub869CB028', 'weight': 1},
     {'name': 'Leonardo', 'hubId': 'hub55A9DF84', 'weight': 1},
-    {'name': 'Gabys Room', 'hubId': 'hub55AA7FC4', 'weight': 1},
+    {'name': 'Gabys Room', 'hubId': 'hub86C24FEC', 'weight': 1},
     {'name': 'Embedded', 'hubId': 'hub869B3540', 'weight': 1},
-    {'name': 'Zuse', 'hubId': 'hub869B3544', 'weight': 1},
+    {'name': 'Zuse', 'hubId': 'hub869B3584', 'weight': 1},
     {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
-    {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1}
+    {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1},
+    # {'name': 'Lionels New Room', 'hubId': 'hub869B3FE0', 'weight': 1},
 ]
 
 # Main BLE beacons
