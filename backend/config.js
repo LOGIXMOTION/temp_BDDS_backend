@@ -47,4 +47,4 @@ const HUB_WEIGHTS = ZONES_CONFIG.reduce((acc, zone) => {
   return acc;
 }, {});
 
-module.exports = { ZONES_CONFIG, MAIN_BLE_BEACONS, HUB_TO_ZONE, HUB_WEIGHTS };
+module.exports = { HUB_WEIGHTS };

@@ -4,8 +4,10 @@ const sqlite3 = require('sqlite3').verbose();
 // let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
 let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
-const { ZONES_CONFIG, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
+const { HUB_WEIGHTS,  } = require('./config');
 let MAIN_BLE_BEACONS = [];
+let DB_HUB_TO_ZONE = {};
+let DB_HUB_WEIGHTS = {};
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +37,8 @@ const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds
 setInterval(updateMainBleBeacons, 500); // Update every 500 ms
 updateMainBleBeacons();
 
+
+
 // Run the outside range check every minute
 setInterval(updateBeaconsAndCheckRange, 1000);
 
@@ -57,6 +61,24 @@ async function updateMainBleBeacons() {
         console.error("Error updating MAIN_BLE_BEACONS:", error);
     }
 }
+
+function updateHubZoneMapping() {
+    db.all("SELECT id, zone FROM hubs", [], (err, rows) => {
+        if (err) {
+            console.error("Error fetching hub zones:", err);
+            return;
+        }
+        DB_HUB_TO_ZONE = rows.reduce((acc, row) => {
+            acc[row.id] = row.zone;
+            // Set default weight of 1 for each hub
+            DB_HUB_WEIGHTS[row.id] = 1;
+            return acc;
+        }, {});
+    });
+}
+
+updateHubZoneMapping();
+setInterval(updateHubZoneMapping, 5000);
 
 function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
@@ -384,33 +406,35 @@ function getLatestRssi(macAddress, hubId, currentTime) {
 }
 
 const calculateAverageForHubAndBeacon = (hubId, macAddress, callback) => {
-	const currentTime = Date.now();
-	const sixtySecondsAgo = currentTime - 61000;
-	
-	db.all("SELECT rssi, timestamp FROM beacon_history WHERE macAddress = ? AND hubId = ? AND timestamp > ?", [macAddress, hubId, sixtySecondsAgo], (err, rows) => {
-		if (err) {
-			return callback(err);
-		}
+    const currentTime = Date.now();
+    const sixtySecondsAgo = currentTime - 61000;
+    
+    db.all("SELECT rssi, timestamp FROM beacon_history WHERE macAddress = ? AND hubId = ? AND timestamp > ?", 
+        [macAddress, hubId, sixtySecondsAgo], (err, rows) => {
+        if (err) {
+            return callback(err);
+        }
 
-		const totalPossibleReadings = 20;
-		let sum = 0;
-		let lastTimestamp = 0;
+        const totalPossibleReadings = 20;
+        let sum = 0;
+        let lastTimestamp = 0;
+        const hubWeight = DB_HUB_WEIGHTS[hubId] || 1;
 
-		rows.forEach(row => {
-			sum += row.rssi * HUB_WEIGHTS[hubId];
-			updateRssiCache(macAddress, hubId, row.rssi, row.timestamp);
-			lastTimestamp = Math.max(lastTimestamp, row.timestamp);
-		});
+        rows.forEach(row => {
+            sum += row.rssi * hubWeight;
+            updateRssiCache(macAddress, hubId, row.rssi, row.timestamp);
+            lastTimestamp = Math.max(lastTimestamp, row.timestamp);
+        });
 
-		const missingReadings = totalPossibleReadings - rows.length;
-		for (let i = 0; i < missingReadings; i++) {
-			const assumedTimestamp = lastTimestamp + (i + 1) * 3000; // Assume readings every 3 seconds
-			sum += getLatestRssi(macAddress, hubId, assumedTimestamp) * HUB_WEIGHTS[hubId];
-		}
+        const missingReadings = totalPossibleReadings - rows.length;
+        for (let i = 0; i < missingReadings; i++) {
+            const assumedTimestamp = lastTimestamp + (i + 1) * 3000;
+            sum += getLatestRssi(macAddress, hubId, assumedTimestamp) * hubWeight;
+        }
 
-		const average = sum / totalPossibleReadings;
-		callback(null, average);
-	});
+        const average = sum / totalPossibleReadings;
+        callback(null, average);
+    });
 };
 
 // Endpoint to receive data from hubs
@@ -424,7 +448,7 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
         const hubData = req.body;
         const hubId = hubData.id;
 
-        if (HUB_TO_ZONE[hubId] && Array.isArray(hubData.items)) {
+        if (DB_HUB_TO_ZONE[hubId] && Array.isArray(hubData.items)) {
             hubData.items.forEach(item => {
                 if (!item || typeof item !== 'object') return; // Skip invalid items
 
