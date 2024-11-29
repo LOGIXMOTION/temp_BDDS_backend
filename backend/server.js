@@ -45,6 +45,10 @@ setInterval(updateBeaconsAndCheckRange, 1000);
 // Run the updateTimeTracking function every x seconds
 setInterval(updateTimeTracking, 5000);
 
+// Run the function to update hub mappings every x seconds
+updateHubZoneMapping();
+setInterval(updateHubZoneMapping, 5000);
+
 // Function to update MAIN_BLE_BEACONS from the database
 async function updateMainBleBeacons() {
     try {
@@ -63,22 +67,24 @@ async function updateMainBleBeacons() {
 }
 
 function updateHubZoneMapping() {
-    db.all("SELECT id, zone FROM hubs", [], (err, rows) => {
+    db.all("SELECT id, zone, weight FROM hubs", [], (err, rows) => {
         if (err) {
-            console.error("Error fetching hub zones:", err);
+            console.error("Error fetching hub data:", err);
             return;
         }
-        DB_HUB_TO_ZONE = rows.reduce((acc, row) => {
-            acc[row.id] = row.zone;
-            // Set default weight of 1 for each hub
-            DB_HUB_WEIGHTS[row.id] = 1;
-            return acc;
-        }, {});
+        DB_HUB_TO_ZONE = {};
+        DB_HUB_WEIGHTS = {};
+        
+        rows.forEach(row => {
+            DB_HUB_TO_ZONE[row.id] = row.zone;
+            // Use stored weight if available, otherwise fallback to 1
+            DB_HUB_WEIGHTS[row.id] = row.weight || 1.0;
+        });
+        
+        console.log("Updated hub mappings. Total hubs:", rows.length);
     });
 }
 
-updateHubZoneMapping();
-setInterval(updateHubZoneMapping, 5000);
 
 function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
@@ -418,7 +424,8 @@ const calculateAverageForHubAndBeacon = (hubId, macAddress, callback) => {
         const totalPossibleReadings = 20;
         let sum = 0;
         let lastTimestamp = 0;
-        const hubWeight = DB_HUB_WEIGHTS[hubId] || 1;
+        // Use the hub's weight from our mapping, fallback to 1.0 if not found
+        const hubWeight = DB_HUB_WEIGHTS[hubId] || 1.0;
 
         rows.forEach(row => {
             sum += row.rssi * hubWeight;
@@ -503,7 +510,7 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
                 }
             });
 
-            db.run("REPLACE INTO hubs (id, zone) VALUES (?, ?)", [hubId, HUB_TO_ZONE[hubId]]);
+            db.run("REPLACE INTO hubs (id, zone) VALUES (?, ?)", [hubId, DB_HUB_TO_ZONE[hubId]]);
         }
 
         res.send({ status: 'OK' });
