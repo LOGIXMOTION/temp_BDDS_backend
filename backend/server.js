@@ -510,7 +510,6 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
                 }
             });
 
-            db.run("REPLACE INTO hubs (id, zone) VALUES (?, ?)", [hubId, DB_HUB_TO_ZONE[hubId]]);
         }
 
         res.send({ status: 'OK' });
