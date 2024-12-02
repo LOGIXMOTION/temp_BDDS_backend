@@ -4,7 +4,6 @@ const sqlite3 = require('sqlite3').verbose();
 // let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
 let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
-const { HUB_WEIGHTS,  } = require('./config');
 let MAIN_BLE_BEACONS = [];
 let DB_HUB_TO_ZONE = {};
 let DB_HUB_WEIGHTS = {};
