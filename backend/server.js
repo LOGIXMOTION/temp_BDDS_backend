@@ -776,8 +776,8 @@ app.post(ZONE_DATA_ENDPOINT, (req, res) => {
     });
 });
 
-// New endpoint to delete hub and associated zone
-app.delete('/asset-tracking-api/zones/:hubId', (req, res) => {
+// New endpoint to delete hub and associated zone 
+app.delete(ZONE_DATA_ENDPOINT + '/:hubId', (req, res) => {
     const { hubId } = req.params;
 
     if (hubId === 'Outside Range') {
