@@ -15,7 +15,7 @@ ZONES_CONFIG = [
     {'name': 'Zuse', 'hubId': 'hub869B3584', 'weight': 1},
     {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
     {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1},
-    # {'name': 'Lionels New Room', 'hubId': 'hub869B3FE0', 'weight': 1},
+    # {'name': 'Embedded', 'hubId': 'hubC9BFBC90', 'weight': 1},
 ]
 
 # Main BLE beacons
@@ -45,11 +45,13 @@ MAIN_BLE_BEACONS = [
     'B0D2781ACDC7',
     'B0D2781ACCCC',
     'E4E1129BDDDD',
-    # 'B12345678912'
+    'B12345678912'
 ]
 
 # API endpoint
 endpoint_url = "https://api.aneeshprasobhan.xyz/asset-tracking-api/data"
+
+# endpoint_url = "https://api-tracking.hard-softwerk.com/data"
 # For local testing
 # endpoint_url = "http://localhost:3000/asset-tracking-api/data"
 

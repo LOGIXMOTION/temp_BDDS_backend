@@ -21,7 +21,7 @@ const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
 const DELETE_ASSETS_ENDPOINT = '/asset-tracking-api/delete-assets';
 const BASE_ENDPOINT = '/asset-tracking-api';
 
-const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
+const beacon_history_CLEANUP_INTERVAL = 60000; // Interval set for x milliseconds
 
 const RSSI_HOLD_TIME = 15000; //  milliseconds to hold RSSI values in cache
 const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from a hub. 
@@ -32,11 +32,11 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 // When a beacon is outside range for 10 minutes, it is set to "Outside Range"
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
 
+setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
+
 // Call the function periodically to ensure MAIN_BLE_BEACONS stays updated
-setInterval(updateMainBleBeacons, 500); // Update every 500 ms
+setInterval(updateMainBleBeacons, 5000); // Update every x ms
 updateMainBleBeacons();
-
-
 
 // Run the outside range check every minute
 setInterval(updateBeaconsAndCheckRange, 1000);
@@ -950,13 +950,7 @@ app.get(TIME_TRACKING_ENDPOINT, (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
-
-
-  // Run cleanup every hour
-  setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
-
-  // Also run it once at startup
-  cleanupBeaconHistory();
+    cleanupBeaconHistory(); // Initial cleanup
 });
 
 process.on('exit', () => {
