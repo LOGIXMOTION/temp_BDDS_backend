@@ -15,7 +15,7 @@ ZONES_CONFIG = [
     {'name': 'Zuse', 'hubId': 'hub869B3584', 'weight': 1},
     {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
     {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1},
-    # {'name': 'Embedded', 'hubId': 'hubC9BFBC90', 'weight': 1},
+    # {'name': 'Test', 'hubId': 'hubC9BFBC90', 'weight': 1},
 ]
 
 # Main BLE beacons
