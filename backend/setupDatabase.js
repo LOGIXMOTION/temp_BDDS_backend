@@ -121,25 +121,30 @@ db.serialize(() => {
 
     // Recreate the view after all tables are set up
     db.run(`CREATE VIEW IF NOT EXISTS v_beacon_latest_rssi AS
-        SELECT
-            bh.macAddress,
-            b.assetName,
-            bh.hubId,
-            h.zone AS currentZone,
-            b.bestHubId,
-            hb.zone AS assignedZone,
-            bh.rssi,
-            MAX(bh.timestamp) as lastSeen
-        FROM
-            beacon_history bh
-        JOIN
-            hubs h ON bh.hubId = h.id
-        JOIN
-            beacons b ON b.macAddress = bh.macAddress
-        LEFT JOIN
-            hubs hb ON hb.id = b.bestHubId
-        GROUP BY
-            bh.macAddress, bh.hubId;
+    SELECT
+        bh.macAddress,
+        b.assetName,
+        bh.hubId,
+        COALESCE(h.zone, 'Outside Range') AS currentZone,
+        b.bestHubId,
+        COALESCE(hb.zone, 
+            CASE 
+                WHEN b.bestHubId = 'Outside Range' THEN 'Outside Range'
+                ELSE 'Outside Range'
+            END
+        ) AS assignedZone,
+        bh.rssi,
+        MAX(bh.timestamp) as lastSeen
+    FROM
+        beacon_history bh
+    JOIN
+        hubs h ON bh.hubId = h.id
+    JOIN
+        beacons b ON b.macAddress = bh.macAddress
+    LEFT JOIN
+        hubs hb ON hb.id = b.bestHubId
+    GROUP BY
+        bh.macAddress, bh.hubId;
     `, (err) => {
         if (err) console.error('Error creating view:', err.message);
         else console.log('Database setup completed successfully.');

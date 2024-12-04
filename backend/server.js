@@ -876,7 +876,7 @@ app.get(RSSI_DATA_ENDPOINT, (req, res) => {
             formattedResponse[row.macAddress][row.currentZone] = {
                 rssi: row.rssi,
                 lastSeen: new Date(row.lastSeen).toISOString(), // Convert to ISO timestamp
-                assignedZone: row.assignedZone || 'Unknown'
+                assignedZone: row.assignedZone || 'Outside Range'
             };
         });
         res.json(formattedResponse);
