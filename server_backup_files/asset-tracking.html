@@ -166,7 +166,7 @@
             <tbody></tbody>
         </table>
         <ul style="margin-top: 10px; padding-left: 20px;">
-            <li>Time counter waits 10 minutes to stop a session after you leave all blukiiHubs' range. This is configurable. Note: The values till 31.08.2024 are not real.</li>
+            <li>Time counter waits 10 minutes to stop a session after you leave all blukiiHubs' range. This is configurable.</li>
         </ul>
     </div>
 
@@ -174,18 +174,18 @@
     <script src="time-tracking.js"></script>
 
     <script>
-	
-		const API_BASE_URL = 'https://api.aneeshprasobhan.xyz/asset-tracking-api';
-		const API_ENDPOINTS = {
-			ZONES: `${API_BASE_URL}/zones`,
-			ASSETS: `${API_BASE_URL}/assets`,
-			RSSI_DATA: `${API_BASE_URL}/rssi-data`,
-			TIME_TRACKING: `${API_BASE_URL}/time-tracking-data`
-		};
-		
+        //const API_BASE_URL = 'http://localhost:3000';
+        const API_BASE_URL = 'https://api.aneeshprasobhan.xyz';    // Use this line for netcup deployment (Aneesh Server)
+
+        const API_ENDPOINTS = {
+            ZONES: `${API_BASE_URL}/zones`,
+            ASSETS: `${API_BASE_URL}/assets`,
+            RSSI_DATA: `${API_BASE_URL}/rssi-data`,
+            TIME_TRACKING: `${API_BASE_URL}/time-tracking-data`
+        };
+
         // Export API constants to make them globally available
         window.API_ENDPOINTS = API_ENDPOINTS;
-		
         const zonesContainer = document.getElementById('zonesContainer');
         const searchInput = document.getElementById('searchInput');
         const searchButton = document.getElementById('searchButton');
@@ -204,7 +204,6 @@
             '#3498db',  // Medium Slate Blue
 			'#ff8000'
         ];
-
 		function updateAssets() {
 			axios.get(API_ENDPOINTS.ZONES)
 				.then(zonesResponse => {
@@ -350,55 +349,55 @@
         }
         
 		
-		function fetchRssiData(zones) {
-			const timeOffset = 2 * 60 * 60 * 1000; // 2 hours in milliseconds for German timezone
-			const fiveSecondsAgo = Date.now() - 5000; // 5 seconds ago in milliseconds
-
-			axios.get(API_ENDPOINTS.RSSI_DATA)
-				.then(response => {
-					const data = response.data;
-					const tableBody = document.getElementById('rssiTable').getElementsByTagName('tbody')[0];
-					tableBody.innerHTML = ''; // Clear previous rows
-					Object.keys(data).forEach(macAddress => {
-						const row = tableBody.insertRow();
-						const macCell = row.insertCell();
-						macCell.innerHTML = `${macAddress}<br><span class="asset-name">${data[macAddress].assetName || ''}</span>`;
-						let assignedZone;
-						zones.forEach((zone, index) => {
-							const rssiCell = row.insertCell();
-							const lastSeenCell = row.insertCell();
-							if (data[macAddress][zone]) {
-								const lastSeenTimestamp = new Date(data[macAddress][zone].lastSeen).getTime();
-								const adjustedLastSeen = new Date(lastSeenTimestamp );
-
-								rssiCell.textContent = data[macAddress][zone].rssi;
-								lastSeenCell.textContent = adjustedLastSeen.toTimeString().split(' ')[0]; // Display adjusted time
-								
-								// Set background color based on timestamp
-								const bgColor = lastSeenTimestamp > fiveSecondsAgo ? 'lightgreen' : 'lightcoral';
-								rssiCell.style.backgroundColor = bgColor;
-								lastSeenCell.style.backgroundColor = bgColor;
-								
-								if (!assignedZone) {
-									assignedZone = data[macAddress][zone].assignedZone;
-								}
-							} else {
-								rssiCell.textContent = '--';
-								lastSeenCell.textContent = '--:--:--';
-								rssiCell.style.backgroundColor = 'lightcoral';
-								lastSeenCell.style.backgroundColor = 'lightcoral';
-							}
-							
-							if (index < zones.length - 1) {
-								lastSeenCell.style.borderRight = '2px solid #000';
-							}
-						});
-						const assignedZoneCell = row.insertCell();
-						assignedZoneCell.textContent = assignedZone || 'Unknown';
-					});
-				})
-				.catch(error => console.error('Failed to fetch RSSI data:', error));
-		}
+        function fetchRssiData(zones) {
+            const timeOffset = 2 * 60 * 60 * 1000; // 2 hours in milliseconds for German timezone // Time offset not needed because ISO string is already in UTC
+            const fiveSecondsAgo = Date.now() - 5000; // 5 seconds ago in milliseconds   
+        
+            axios.get(API_ENDPOINTS.RSSI_DATA)
+                .then(response => {
+                    const data = response.data;
+                    const tableBody = document.getElementById('rssiTable').getElementsByTagName('tbody')[0];
+                    tableBody.innerHTML = ''; // Clear previous rows
+                    Object.keys(data).forEach(macAddress => {
+                        const row = tableBody.insertRow();
+                        const macCell = row.insertCell();
+                        macCell.innerHTML = `${macAddress}<br><span class="asset-name">${data[macAddress].assetName || ''}</span>`;
+                        let assignedZone;
+                        zones.forEach((zone, index) => {
+                            const rssiCell = row.insertCell();
+                            const lastSeenCell = row.insertCell();
+                            if (data[macAddress][zone]) {
+                                const lastSeenTimestamp = new Date(data[macAddress][zone].lastSeen).getTime();
+                                const adjustedLastSeen = new Date(lastSeenTimestamp);   // Time offset not needed because ISO string is already in UTC
+        
+                                rssiCell.textContent = data[macAddress][zone].rssi;
+                                lastSeenCell.textContent = adjustedLastSeen.toTimeString().split(' ')[0]; // Display adjusted time
+                                
+                                // Set background color based on timestamp
+                                const bgColor = lastSeenTimestamp > fiveSecondsAgo ? 'lightgreen' : 'lightcoral';
+                                rssiCell.style.backgroundColor = bgColor;
+                                lastSeenCell.style.backgroundColor = bgColor;
+                                
+                                if (!assignedZone) {
+                                    assignedZone = data[macAddress][zone].assignedZone;
+                                }
+                            } else {
+                                rssiCell.textContent = '--';
+                                lastSeenCell.textContent = '--:--:--';
+                                rssiCell.style.backgroundColor = 'lightcoral';
+                                lastSeenCell.style.backgroundColor = 'lightcoral';
+                            }
+                            
+                            if (index < zones.length - 1) {
+                                lastSeenCell.style.borderRight = '2px solid #000';
+                            }
+                        });
+                        const assignedZoneCell = row.insertCell();
+                        assignedZoneCell.textContent = assignedZone || 'Unknown';
+                    });
+                })
+                .catch(error => console.error('Failed to fetch RSSI data:', error));
+        }
         
         
         function closeRssiPopup() {
@@ -417,13 +416,12 @@
         // Initial update and set interval for regular updates
         updateAssets();
         setInterval(updateAssets, 5000);
-		
 
         // Time Tracking Popup
         document.getElementById('timeTrackingButton').addEventListener('click', openTimeTrackingPopup);
 
 
-
+        
     </script>
 </body>
 </html>

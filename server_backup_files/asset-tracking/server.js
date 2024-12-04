@@ -1,26 +1,26 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+//let db = new sqlite3.Database('./rtls_demo.db');
 
-// let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
 let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
-const { ZONES_CONFIG, HUB_TO_ZONE, HUB_WEIGHTS,  } = require('./config');
 let MAIN_BLE_BEACONS = [];
+let DB_HUB_TO_ZONE = {};
+let DB_HUB_WEIGHTS = {};
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const cors = require('cors');
 
-const HUB_DATA_ENDPOINT = '/asset-tracking-api/data';
-const ZONE_DATA_ENDPOINT = '/asset-tracking-api/zones';
-const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
-const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
-const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
-const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
-const DELETE_ASSETS_ENDPOINT = '/asset-tracking-api/delete-assets';
-const BASE_ENDPOINT = '/asset-tracking-api';
+const HUB_DATA_ENDPOINT = '/data';
+const ZONE_DATA_ENDPOINT = '/zones';
+const ASSET_DATA_ENDPOINT = '/assets';
+const RSSI_DATA_ENDPOINT = '/rssi-data';
+const TIME_TRACKING_ENDPOINT = '/time-tracking-data';
+const NEW_ASSETS_ENDPOINT = '/new-assets';
+const DELETE_ASSETS_ENDPOINT = '/delete-assets';
 
-const beacon_history_CLEANUP_INTERVAL = 3600000; // Interval set for 1 hour in milliseconds
+const beacon_history_CLEANUP_INTERVAL = 60000; // Interval set for x milliseconds
 
 const RSSI_HOLD_TIME = 15000; //  milliseconds to hold RSSI values in cache
 const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from a hub. 
@@ -31,15 +31,21 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 // When a beacon is outside range for 10 minutes, it is set to "Outside Range"
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
 
+setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
+
 // Call the function periodically to ensure MAIN_BLE_BEACONS stays updated
-setInterval(updateMainBleBeacons, 500); // Update every 500 ms
+setInterval(updateMainBleBeacons, 5000); // Update every x ms
 updateMainBleBeacons();
 
-// Run the outside range check every minute
+// Run the outside range check every x seconds
 setInterval(updateBeaconsAndCheckRange, 1000);
 
 // Run the updateTimeTracking function every x seconds
 setInterval(updateTimeTracking, 5000);
+
+// Run the function to update hub mappings every x seconds
+updateHubZoneMapping();
+setInterval(updateHubZoneMapping, 30000);
 
 // Function to update MAIN_BLE_BEACONS from the database
 async function updateMainBleBeacons() {
@@ -57,6 +63,26 @@ async function updateMainBleBeacons() {
         console.error("Error updating MAIN_BLE_BEACONS:", error);
     }
 }
+
+function updateHubZoneMapping() {
+    db.all("SELECT id, zone, weight FROM hubs", [], (err, rows) => {
+        if (err) {
+            console.error("Error fetching hub data:", err);
+            return;
+        }
+        DB_HUB_TO_ZONE = {};
+        DB_HUB_WEIGHTS = {};
+        
+        rows.forEach(row => {
+            DB_HUB_TO_ZONE[row.id] = row.zone;
+            // Use stored weight if available, otherwise fallback to 1
+            DB_HUB_WEIGHTS[row.id] = row.weight || 1.0;
+        });
+        
+        console.log("Updated hub mappings. Total hubs:", rows.length);
+    });
+}
+
 
 function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
@@ -241,7 +267,7 @@ function updateTimeTracking() {
                     return;
                 }
 
-                console.log("Active beacons:", activeBeacons);
+                // console.log("Active beacons:", activeBeacons);
 
                 activeBeacons.forEach(beacon => {
                     const lastUpdatedGermanDate = convertToGermanDate(beacon.lastUpdatedTimestamp);
@@ -253,7 +279,7 @@ function updateTimeTracking() {
                         }
 
                         if (timeTrackingRow) {
-                            console.log("Found ongoing session for active beacon:", beacon.macAddress);
+                            // console.log("Found ongoing session for active beacon:", beacon.macAddress);
 
                             if ((lastUpdatedGermanDate === currentGermanDate) && (timeTrackingRow.date === currentGermanDate)) {
                                 console.log("lastUpdatedGermanDate =", lastUpdatedGermanDate, "currentGermanDate =", currentGermanDate);
@@ -352,10 +378,8 @@ function updateTimeTracking() {
 app.use(cors());
 
 app.use(express.json());
-// Uncoment the follow for production and comment the above line
-// app.use('/asset-tracking-api', express.json());
 
-app.use(BASE_ENDPOINT, express.json());
+
 
 // FUNCTIONS AND CONSTANTS FOR RSSI DATA PROCESSING
 
@@ -384,33 +408,36 @@ function getLatestRssi(macAddress, hubId, currentTime) {
 }
 
 const calculateAverageForHubAndBeacon = (hubId, macAddress, callback) => {
-	const currentTime = Date.now();
-	const sixtySecondsAgo = currentTime - 61000;
-	
-	db.all("SELECT rssi, timestamp FROM beacon_history WHERE macAddress = ? AND hubId = ? AND timestamp > ?", [macAddress, hubId, sixtySecondsAgo], (err, rows) => {
-		if (err) {
-			return callback(err);
-		}
+    const currentTime = Date.now();
+    const sixtySecondsAgo = currentTime - 61000;
+    
+    db.all("SELECT rssi, timestamp FROM beacon_history WHERE macAddress = ? AND hubId = ? AND timestamp > ?", 
+        [macAddress, hubId, sixtySecondsAgo], (err, rows) => {
+        if (err) {
+            return callback(err);
+        }
 
-		const totalPossibleReadings = 20;
-		let sum = 0;
-		let lastTimestamp = 0;
+        const totalPossibleReadings = 20;
+        let sum = 0;
+        let lastTimestamp = 0;
+        // Use the hub's weight from our mapping, fallback to 1.0 if not found
+        const hubWeight = DB_HUB_WEIGHTS[hubId] || 1.0;
 
-		rows.forEach(row => {
-			sum += row.rssi * HUB_WEIGHTS[hubId];
-			updateRssiCache(macAddress, hubId, row.rssi, row.timestamp);
-			lastTimestamp = Math.max(lastTimestamp, row.timestamp);
-		});
+        rows.forEach(row => {
+            sum += row.rssi * hubWeight;
+            updateRssiCache(macAddress, hubId, row.rssi, row.timestamp);
+            lastTimestamp = Math.max(lastTimestamp, row.timestamp);
+        });
 
-		const missingReadings = totalPossibleReadings - rows.length;
-		for (let i = 0; i < missingReadings; i++) {
-			const assumedTimestamp = lastTimestamp + (i + 1) * 3000; // Assume readings every 3 seconds
-			sum += getLatestRssi(macAddress, hubId, assumedTimestamp) * HUB_WEIGHTS[hubId];
-		}
+        const missingReadings = totalPossibleReadings - rows.length;
+        for (let i = 0; i < missingReadings; i++) {
+            const assumedTimestamp = lastTimestamp + (i + 1) * 3000;
+            sum += getLatestRssi(macAddress, hubId, assumedTimestamp) * hubWeight;
+        }
 
-		const average = sum / totalPossibleReadings;
-		callback(null, average);
-	});
+        const average = sum / totalPossibleReadings;
+        callback(null, average);
+    });
 };
 
 // Endpoint to receive data from hubs
@@ -424,7 +451,7 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
         const hubData = req.body;
         const hubId = hubData.id;
 
-        if (HUB_TO_ZONE[hubId] && Array.isArray(hubData.items)) {
+        if (DB_HUB_TO_ZONE[hubId] && Array.isArray(hubData.items)) {
             hubData.items.forEach(item => {
                 if (!item || typeof item !== 'object') return; // Skip invalid items
 
@@ -479,7 +506,6 @@ app.post(HUB_DATA_ENDPOINT, (req, res) => {
                 }
             });
 
-            db.run("REPLACE INTO hubs (id, zone) VALUES (?, ?)", [hubId, HUB_TO_ZONE[hubId]]);
         }
 
         res.send({ status: 'OK' });
@@ -618,56 +644,171 @@ app.delete(DELETE_ASSETS_ENDPOINT, (req, res) => {
 
 
 
-// Endpoint to serve zone data
+// Modified ZONE_DATA_ENDPOINT to include all hub/zone information
 app.get(ZONE_DATA_ENDPOINT, (req, res) => {
-    const zones = ZONES_CONFIG.map(zone => zone.name);
+    const query = `
+        SELECT 
+            h.*,
+            COUNT(b.macAddress) as beacon_count
+        FROM hubs h
+        LEFT JOIN beacons b ON h.id = b.bestHubId
+        GROUP BY h.id
+    `;
 
-    // Helper function to get the beacon count and hub ID for a zone
-    const getZoneData = (zone) => {
-        return new Promise((resolve, reject) => {
-            if (zone === "Outside Range") {
-                // Special handling for "Outside Range"
-                db.get("SELECT COUNT(macAddress) as count FROM beacons WHERE bestHubId = 'Outside Range'", [], (err, row) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve({
-                            name: zone,
-                            count: row ? row.count : 0,
-                            hubId: null // No hubId for "Outside Range"
-                        });
-                    }
-                });
-            } else {
-                // Handle regular zones
-                db.get("SELECT COUNT(b.macAddress) as count, h.id as hubId FROM beacons b JOIN hubs h ON b.bestHubId = h.id WHERE h.zone = ?", [zone], (err, row) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        const zoneConfig = ZONES_CONFIG.find(config => config.name === zone);
-                        resolve({
-                            name: zone,
-                            count: row ? row.count : 0,
-                            hubId: row ? row.hubId : (zoneConfig ? zoneConfig.hubId : null)
-                        });
-                    }
-                });
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching zone data:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+
+        const formattedZones = rows.map(row => ({
+            name: row.zone,
+            hubId: row.id,
+            count: row.beacon_count || 0,
+            hubData: {
+                coordinates: {
+                    lat: row.latitude,
+                    lng: row.longitude
+                },
+                height: row.height,
+                weight: row.weight,
+                orientationAngle: row.orientation_angle,
+                tiltAngle: row.tilt_angle
+            },
+            zoneData: {
+                vertices: JSON.parse(row.zone_vertices || '[]'),
+                color: row.zone_color,
+                opacity: row.zone_opacity
             }
-        });
-    };
+        }));
 
-    // Use Promise.all to wait for all database calls to complete
-    Promise.all(zones.map(zone => getZoneData(zone)))
-        .then(results => {
-            res.json({ zones: results });
-        })
-        .catch(error => {
-            console.error('Error fetching zone data:', error);
-            res.status(500).send({ error: 'Internal server error' });
-        });
+        // Add "Outside Range" zone
+        db.get(
+            "SELECT COUNT(macAddress) as count FROM beacons WHERE bestHubId = 'Outside Range'",
+            [],
+            (err, outsideRange) => {
+                if (err) {
+                    console.error('Error fetching outside range count:', err);
+                    return res.status(500).json({ error: 'Internal server error' });
+                }
+
+                formattedZones.push({
+                    name: "Outside Range",
+                    hubId: "Outside Range",
+                    count: outsideRange.count || 0
+                });
+
+                res.json({ zones: formattedZones });
+            }
+        );
+    });
 });
 
+// New endpoint to create/update hub and zone
+app.post(ZONE_DATA_ENDPOINT, (req, res) => {
+    const {
+        hubId,
+        zoneName,
+        hubData,
+        zoneData
+    } = req.body;
 
+    if (!hubId || !zoneName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const query = `
+        INSERT INTO hubs (
+            id,
+            zone,
+            latitude,
+            longitude,
+            height,
+            weight,
+            orientation_angle,
+            tilt_angle,
+            zone_vertices,
+            zone_color,
+            zone_opacity,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            zone = excluded.zone,
+            latitude = excluded.latitude,
+            longitude = excluded.longitude,
+            height = excluded.height,
+            weight = excluded.weight,
+            orientation_angle = excluded.orientation_angle,
+            tilt_angle = excluded.tilt_angle,
+            zone_vertices = excluded.zone_vertices,
+            zone_color = excluded.zone_color,
+            zone_opacity = excluded.zone_opacity,
+            updated_at = excluded.updated_at
+    `;
+
+    const params = [
+        hubId,
+        zoneName,
+        hubData.coordinates.lat,
+        hubData.coordinates.lng,
+        hubData.height,
+        hubData.weight,
+        hubData.orientationAngle,
+        hubData.tiltAngle,
+        JSON.stringify(zoneData.vertices),
+        zoneData.color,
+        zoneData.opacity,
+        Math.floor(Date.now() / 1000)
+    ];
+
+    db.run(query, params, function(err) {
+        if (err) {
+            console.error('Error saving zone:', err);
+            return res.status(500).json({ error: 'Failed to save zone' });
+        }
+        res.json({ 
+            message: 'Zone saved successfully',
+            zoneId: this.lastID
+        });
+    });
+});
+
+// New endpoint to delete hub and associated zone
+app.delete(ZONE_DATA_ENDPOINT + '/:hubId', (req, res) => {
+    const { hubId } = req.params;
+
+    if (hubId === 'Outside Range') {
+        return res.status(400).json({ error: 'Cannot delete Outside Range zone' });
+    }
+
+    db.run('DELETE FROM hubs WHERE id = ?', [hubId], function(err) {
+        if (err) {
+            console.error('Error deleting zone:', err);
+            return res.status(500).json({ error: 'Failed to delete zone' });
+        }
+
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Zone not found' });
+        }
+
+        // Update any beacons in this zone to "Outside Range"
+        db.run(
+            "UPDATE beacons SET bestHubId = 'Outside Range' WHERE bestHubId = ?",
+            [hubId],
+            function(err) {
+                if (err) {
+                    console.error('Error updating beacons:', err);
+                    return res.status(500).json({ error: 'Failed to update beacons' });
+                }
+
+                res.json({ 
+                    message: 'Zone deleted successfully',
+                    beaconsUpdated: this.changes
+                });
+            }
+        );
+    });
+});
 
 // New endpoint to get all asset data including humanFlag
 
@@ -806,13 +947,7 @@ app.get(TIME_TRACKING_ENDPOINT, (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
-
-
-  // Run cleanup every hour
-  setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
-
-  // Also run it once at startup
-  cleanupBeaconHistory();
+    cleanupBeaconHistory(); // Initial cleanup
 });
 
 process.on('exit', () => {
