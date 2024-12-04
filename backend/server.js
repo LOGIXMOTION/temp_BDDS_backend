@@ -1,7 +1,7 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+//let db = new sqlite3.Database('./rtls_demo.db');
 
-// let db = new sqlite3.Database('./rtls_demo.db');
 //Use the following line for docker and comment the above line
 let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
 let MAIN_BLE_BEACONS = [];
@@ -12,14 +12,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const cors = require('cors');
 
-const HUB_DATA_ENDPOINT = '/asset-tracking-api/data';
-const ZONE_DATA_ENDPOINT = '/asset-tracking-api/zones';
-const ASSET_DATA_ENDPOINT = '/asset-tracking-api/assets';
-const RSSI_DATA_ENDPOINT = '/asset-tracking-api/rssi-data';
-const TIME_TRACKING_ENDPOINT = '/asset-tracking-api/time-tracking-data';
-const NEW_ASSETS_ENDPOINT = '/asset-tracking-api/new-assets';
-const DELETE_ASSETS_ENDPOINT = '/asset-tracking-api/delete-assets';
-const BASE_ENDPOINT = '/asset-tracking-api';
+const HUB_DATA_ENDPOINT = '/data';
+const ZONE_DATA_ENDPOINT = '/zones';
+const ASSET_DATA_ENDPOINT = '/assets';
+const RSSI_DATA_ENDPOINT = '/rssi-data';
+const TIME_TRACKING_ENDPOINT = '/time-tracking-data';
+const NEW_ASSETS_ENDPOINT = '/new-assets';
+const DELETE_ASSETS_ENDPOINT = '/delete-assets';
 
 const beacon_history_CLEANUP_INTERVAL = 60000; // Interval set for x milliseconds
 
@@ -38,7 +37,7 @@ setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
 setInterval(updateMainBleBeacons, 5000); // Update every x ms
 updateMainBleBeacons();
 
-// Run the outside range check every minute
+// Run the outside range check every x seconds
 setInterval(updateBeaconsAndCheckRange, 1000);
 
 // Run the updateTimeTracking function every x seconds
@@ -46,7 +45,7 @@ setInterval(updateTimeTracking, 5000);
 
 // Run the function to update hub mappings every x seconds
 updateHubZoneMapping();
-setInterval(updateHubZoneMapping, 5000);
+setInterval(updateHubZoneMapping, 30000);
 
 // Function to update MAIN_BLE_BEACONS from the database
 async function updateMainBleBeacons() {
@@ -268,7 +267,7 @@ function updateTimeTracking() {
                     return;
                 }
 
-                console.log("Active beacons:", activeBeacons);
+                // console.log("Active beacons:", activeBeacons);
 
                 activeBeacons.forEach(beacon => {
                     const lastUpdatedGermanDate = convertToGermanDate(beacon.lastUpdatedTimestamp);
@@ -280,7 +279,7 @@ function updateTimeTracking() {
                         }
 
                         if (timeTrackingRow) {
-                            console.log("Found ongoing session for active beacon:", beacon.macAddress);
+                            // console.log("Found ongoing session for active beacon:", beacon.macAddress);
 
                             if ((lastUpdatedGermanDate === currentGermanDate) && (timeTrackingRow.date === currentGermanDate)) {
                                 console.log("lastUpdatedGermanDate =", lastUpdatedGermanDate, "currentGermanDate =", currentGermanDate);
@@ -379,10 +378,8 @@ function updateTimeTracking() {
 app.use(cors());
 
 app.use(express.json());
-// Uncoment the follow for production and comment the above line
-// app.use('/asset-tracking-api', express.json());
 
-app.use(BASE_ENDPOINT, express.json());
+
 
 // FUNCTIONS AND CONSTANTS FOR RSSI DATA PROCESSING
 
@@ -776,7 +773,7 @@ app.post(ZONE_DATA_ENDPOINT, (req, res) => {
     });
 });
 
-// New endpoint to delete hub and associated zone 
+// New endpoint to delete hub and associated zone
 app.delete(ZONE_DATA_ENDPOINT + '/:hubId', (req, res) => {
     const { hubId } = req.params;
 
