@@ -1,9 +1,9 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-let db = new sqlite3.Database('./rtls_demo.db');
+// let db = new sqlite3.Database('./rtls_demo.db');
 
 //Use the following line for docker and comment the above line
-// let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
+let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
 let MAIN_BLE_BEACONS = [];
 let DB_HUB_TO_ZONE = {};
 let DB_HUB_WEIGHTS = {};
@@ -779,6 +779,7 @@ app.delete(`${ZONE_DATA_ENDPOINT}/:zoneName`, (req, res) => {
 app.get(HUB_ENDPOINT, (req, res) => {
     const query = `
         SELECT h.id, h.zoneName, h.weight, h.type, h.coordinates, 
+               h.height, h.orientation_angle, h.tilt_angle,
                h.created_at, h.updated_at,
                COUNT(b.macAddress) as beacon_count
         FROM hubs h
@@ -798,6 +799,9 @@ app.get(HUB_ENDPOINT, (req, res) => {
             weight: row.weight,
             type: row.type,
             coordinates: row.coordinates ? JSON.parse(row.coordinates) : null,
+            height: row.height || 0,
+            orientationAngle: row.orientation_angle || 0,
+            tiltAngle: row.tilt_angle || 0,
             beaconCount: row.beacon_count || 0,
             createdAt: row.created_at,
             updatedAt: row.updated_at
@@ -809,13 +813,12 @@ app.get(HUB_ENDPOINT, (req, res) => {
 
 // Modified hub endpoint
 app.post(HUB_ENDPOINT, (req, res) => {
-    const { hubId, zoneName, weight, type, coordinates } = req.body;
+    const { hubId, zoneName, weight, type, coordinates, height, orientationAngle, tiltAngle } = req.body;
     
     if (!hubId || !zoneName || !type || !coordinates) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // First verify zone exists
     db.get('SELECT zoneName FROM zones WHERE zoneName = ?', 
         [zoneName], (err, row) => {
             if (!row) {
@@ -824,13 +827,20 @@ app.post(HUB_ENDPOINT, (req, res) => {
             }
             
             const query = `
-                INSERT INTO hubs (id, zoneName, weight, type, coordinates, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO hubs (
+                    id, zoneName, weight, type, coordinates, 
+                    height, orientation_angle, tilt_angle, 
+                    updated_at
+                ) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     zoneName = excluded.zoneName,
                     weight = excluded.weight,
                     type = excluded.type,
                     coordinates = excluded.coordinates,
+                    height = excluded.height,
+                    orientation_angle = excluded.orientation_angle,
+                    tilt_angle = excluded.tilt_angle,
                     updated_at = excluded.updated_at`;
 
             db.run(query,
@@ -840,6 +850,9 @@ app.post(HUB_ENDPOINT, (req, res) => {
                     weight || 1.0, 
                     type,
                     JSON.stringify(coordinates),
+                    height || 0,
+                    orientationAngle || 0,
+                    tiltAngle || 0,
                     Math.floor(Date.now() / 1000)
                 ],
                 (err) => {

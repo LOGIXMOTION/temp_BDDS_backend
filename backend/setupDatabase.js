@@ -112,6 +112,15 @@ db.serialize(() => {
                     "ALTER TABLE hubs ADD COLUMN coordinates TEXT"
                 );
 
+                alterTableCommands.push(
+                    "ALTER TABLE hubs ADD COLUMN type TEXT",
+                    "ALTER TABLE hubs ADD COLUMN coordinates TEXT",
+                    "ALTER TABLE hubs ADD COLUMN height REAL DEFAULT 0",
+                    "ALTER TABLE hubs ADD COLUMN orientation_angle REAL DEFAULT 0",
+                    "ALTER TABLE hubs ADD COLUMN tilt_angle REAL DEFAULT 0"
+                );
+                
+
                 // Execute commands sequentially
                 function runNextCommand() {
                     if (alterTableCommands.length === 0) {
