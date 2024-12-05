@@ -7,53 +7,53 @@ from datetime import datetime, timedelta
 
 # Hubs configuration
 ZONES_CONFIG = [
-    {'name': 'Lionels Room', 'hubId': 'hub869B3FE0', 'weight': 1},
+    # {'name': 'Lionels Room', 'hubId': 'hub869B3FE0', 'weight': 1},
     # {'name': 'Karins Room', 'hubId': 'hub869CB028', 'weight': 1},
     # {'name': 'Leonardo', 'hubId': 'hub55A9DF84', 'weight': 1},
     # {'name': 'Gabys Room', 'hubId': 'hub86C24FEC', 'weight': 1},
-    # {'name': 'Embedded', 'hubId': 'hub869B3540', 'weight': 1},
+    {'name': 'Embedded', 'hubId': 'hub869B3540', 'weight': 1},
     # {'name': 'Zuse', 'hubId': 'hub869B3584', 'weight': 1},
     # {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
     # {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1},
-    # {'name': 'Test', 'hubId': 'hubC9BFBC90', 'weight': 1},
+    {'name': 'Embedded', 'hubId': 'hubC9BFBC90', 'weight': 1},
 ]
 
 # Main BLE beacons
 MAIN_BLE_BEACONS = [
     'E4E1129BDC9A',
-    'E4E1129BDB69',
-    'E4E1129BDB75',
-    'E4E1129BDE9D',
-    'B09122E58408',
-    'F05ECD32E5F1',
-    'E4E1129C2810',
-    'E4E1129C2B71',
-    'B0D2781ACDD1',
-    'B0D2781ACDA3',
-    'B0D27817DC94',
-    'B0D27817DCAE',
-    'B0D2781ACDCB',
-    'B0D27817DCB6',
-    'B0D27817DCB1',
-    'B0D27817DCA8',
-    'B0D27817DCBC',
-    'B0D27817DC9C',
-    'B0D27817DA5A',
-    'B0D2781ACDA7',
-    'B0D27817DCA4',
-    'B0D27817DA64',
-    'B0D2781ACDC7',
-    'B0D2781ACCCC',
-    'E4E1129BDDDD',
-    'B12345678912'
+    # 'E4E1129BDB69',
+    # 'E4E1129BDB75',
+    # 'E4E1129BDE9D',
+    # 'B09122E58408',
+    # 'F05ECD32E5F1',
+    # 'E4E1129C2810',
+    # 'E4E1129C2B71',
+    # 'B0D2781ACDD1',
+    # 'B0D2781ACDA3',
+    # 'B0D27817DC94',
+    # 'B0D27817DCAE',
+    # 'B0D2781ACDCB',
+    # 'B0D27817DCB6',
+    # 'B0D27817DCB1',
+    # 'B0D27817DCA8',
+    # 'B0D27817DCBC',
+    # 'B0D27817DC9C',
+    # 'B0D27817DA5A',
+    # 'B0D2781ACDA7',
+    # 'B0D27817DCA4',
+    # 'B0D27817DA64',
+    # 'B0D2781ACDC7',
+    # 'B0D2781ACCCC',
+    # 'E4E1129BDDDD',
+    # 'B12345678912'
 ]
 
 # API endpoint
-# endpoint_url = "https://api.aneeshprasobhan.xyz/data"
+endpoint_url = "https://api.aneeshprasobhan.xyz/data"
 
 # endpoint_url = "https://api-tracking.hard-softwerk.com/data"
 # For local testing
-endpoint_url = "http://localhost:3000/data"
+# endpoint_url = "http://localhost:3000/data"
 
 def create_json_data_for_all_beacons(hub):
         # current_timestamp = int((datetime.now() + timedelta(days=5)).timestamp() * 1000)
