@@ -6,10 +6,10 @@ const multer = require('multer');
 
 const PLANS_DIR = process.platform === 'win32' ? './plans' : '/usr/src/app/plans';
 
-let db = new sqlite3.Database('./rtls_demo.db');
+// let db = new sqlite3.Database('./rtls_demo.db');
 
 //Use the following line for docker and comment the above line
-// let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
+let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
 let MAIN_BLE_BEACONS = [];
 let DB_HUB_TO_ZONE = {};
 let DB_HUB_WEIGHTS = {};
