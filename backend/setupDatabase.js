@@ -65,6 +65,28 @@ db.serialize(() => {
         UNIQUE(date, macAddress, startTimeSection)
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        org TEXT NOT NULL,
+        locale_info TEXT NOT NULL,
+        floor INTEGER,
+        open_ground BOOLEAN,
+        image_path TEXT NOT NULL,
+        top_left TEXT NOT NULL,
+        top_right TEXT NOT NULL,
+        bottom_left TEXT NOT NULL,
+        rotation REAL,
+        center TEXT NOT NULL,
+        opacity REAL,
+        scale REAL,
+        dimensions TEXT NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
+    
+    db.run(`CREATE INDEX IF NOT EXISTS idx_plans_org  ON plans(org)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_plans_locale  ON plans(locale_info)`);
+
     // Create indexes
     db.run("CREATE INDEX IF NOT EXISTS idx_mac_hub ON beacon_history(macAddress, hubId)");
     db.run("CREATE INDEX IF NOT EXISTS idx_timestamp ON beacon_history(timestamp)");
@@ -73,6 +95,8 @@ db.serialize(() => {
     db.run("CREATE INDEX IF NOT EXISTS idx_hubs_zone ON hubs(zoneName)");
     db.run("CREATE INDEX IF NOT EXISTS idx_beacons_zone ON beacons(bestZone)");
     db.run("CREATE INDEX IF NOT EXISTS idx_zones_updated ON zones(updated_at)");
+
+
 
     // Create view and then add new columns
     db.run(`CREATE VIEW IF NOT EXISTS v_beacon_latest_rssi AS

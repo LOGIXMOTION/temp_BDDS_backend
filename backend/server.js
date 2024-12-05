@@ -1,9 +1,15 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-// let db = new sqlite3.Database('./rtls_demo.db');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+const PLANS_DIR = process.platform === 'win32' ? './plans' : '/usr/src/app/plans';
+
+let db = new sqlite3.Database('./rtls_demo.db');
 
 //Use the following line for docker and comment the above line
-let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
+// let db = new sqlite3.Database('/usr/src/app/db/rtls_demo.db');
 let MAIN_BLE_BEACONS = [];
 let DB_HUB_TO_ZONE = {};
 let DB_HUB_WEIGHTS = {};
@@ -20,6 +26,7 @@ const RSSI_DATA_ENDPOINT = '/rssi-data';
 const TIME_TRACKING_ENDPOINT = '/time-tracking-data';
 const NEW_ASSETS_ENDPOINT = '/new-assets';
 const DELETE_ASSETS_ENDPOINT = '/delete-assets';
+const PLANS_ENDPOINT = '/plans';
 
 const beacon_history_CLEANUP_INTERVAL = 60000; // Interval set for x milliseconds
 
@@ -31,6 +38,44 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 
 // When a beacon is outside range for 10 minutes, it is set to "Outside Range"
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
+
+
+
+app.use('/plans', express.static(PLANS_DIR));
+// Configure multer for image upload
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // Parse the JSON data from form-data
+        const planData = JSON.parse(req.body.data || '{}');
+        const org = planData.org;
+        
+        if (!org) {
+            return cb(new Error('Organization name is required'));
+        }
+
+        const orgDir = path.join(PLANS_DIR, org);
+        
+        // Create directories if they don't exist
+        fs.mkdirSync(PLANS_DIR, { recursive: true });
+        fs.mkdirSync(orgDir, { recursive: true });
+        
+        cb(null, orgDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, 'temp.png');
+    }
+});
+
+const upload = multer({ 
+    storage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'image/png') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PNG files are allowed'));
+        }
+    }
+});
 
 setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
 
@@ -1058,6 +1103,144 @@ app.get(TIME_TRACKING_ENDPOINT, (req, res) => {
     });
 });
 
+// Floor Plan Endpoints
+app.post(PLANS_ENDPOINT, upload.single('image'), (req, res) => {
+
+    try{
+        const planData = JSON.parse(req.body.data);
+        const file = req.file;
+        
+        if (!file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            const query = `
+                INSERT INTO plans (
+                    org, locale_info, floor, open_ground, image_path,
+                    top_left, top_right, bottom_left, rotation,
+                    center, opacity, scale, dimensions
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+
+            db.run(query, [
+                planData.org,
+                planData.locale_info,
+                planData.floor,
+                planData.openGround,
+                'temp',
+                JSON.stringify(planData.topLeft),
+                JSON.stringify(planData.topRight),
+                JSON.stringify(planData.bottomLeft),
+                planData.rotation,
+                JSON.stringify(planData.center),
+                planData.opacity,
+                planData.scale,
+                JSON.stringify(planData.dimensions)
+            ], function(err) {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Failed to save plan data' });
+                }
+
+                const id = this.lastID;
+                const newPath = path.join(PLANS_DIR, planData.org, `${id}.png`);
+                
+                fs.rename(file.path, newPath, (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: 'Failed to save image' });
+                    }
+
+                    db.run('UPDATE plans SET image_path = ? WHERE id = ?', 
+                        [`${id}.png`, id], (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: 'Failed to update image path' });
+                        }
+
+                        db.run('COMMIT');
+                        res.json({ id });
+                    });
+                });
+            });
+        });
+    } catch (error) {
+        console.error('Error saving floor plan:', error);
+        res.status(400).json({ error: 'Invalid plan data' })
+    }
+
+});
+
+// GET endpoint
+app.get(PLANS_ENDPOINT, (req, res) => {
+    const { org, locale_info, floor, openGround } = req.query;
+    
+    let query = 'SELECT * FROM plans WHERE org = ? AND locale_info = ?';
+    const params = [org, locale_info];
+
+    if (floor !== undefined) {
+        query += ' AND floor = ?';
+        params.push(floor);
+    }
+    if (openGround !== undefined) {
+        query += ' AND open_ground = ?';
+        params.push(openGround);
+    }
+
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to fetch plans' });
+        }
+
+        const plans = rows.map(row => ({
+            id: row.id,
+            org: row.org,
+            locale_info: row.locale_info,
+            floor: row.floor,
+            openGround: row.open_ground,
+            imagePath: `/plans/${row.org}/${row.image_path}`,
+            topLeft: JSON.parse(row.top_left),
+            topRight: JSON.parse(row.top_right),
+            bottomLeft: JSON.parse(row.bottom_left),
+            rotation: row.rotation,
+            center: JSON.parse(row.center),
+            opacity: row.opacity,
+            scale: row.scale,
+            dimensions: JSON.parse(row.dimensions)
+        }));
+
+        res.json({ plans });
+    });
+});
+
+// DELETE endpoint
+app.delete(`${PLANS_ENDPOINT}/:id`, (req, res) => {
+    const { id } = req.params;
+
+    db.get('SELECT org, image_path FROM plans WHERE id = ?', [id], (err, row) => {
+        if (err || !row) {
+            return res.status(404).json({ error: 'Plan not found' });
+        }
+
+        const imagePath = path.join(PLANS_DIR, row.org, row.image_path);
+        
+        db.run('DELETE FROM plans WHERE id = ?', [id], (err) => {
+            if (err) {
+                return res.status(500).json({ error: 'Failed to delete plan' });
+            }
+
+            fs.unlink(imagePath, (err) => {
+                if (err) {
+                    console.error('Failed to delete image file:', err);
+                }
+                res.json({ message: 'Plan deleted successfully' });
+            });
+        });
+    });
+});
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
