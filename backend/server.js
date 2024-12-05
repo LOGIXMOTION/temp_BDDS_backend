@@ -28,7 +28,7 @@ const NEW_ASSETS_ENDPOINT = '/new-assets';
 const DELETE_ASSETS_ENDPOINT = '/delete-assets';
 const PLANS_ENDPOINT = '/plans';
 
-const beacon_history_CLEANUP_INTERVAL = 60000; // Interval set for x milliseconds
+const beacon_history_CLEANUP_INTERVAL = 5 * 60 * 1000;; // Interval set for x milliseconds
 
 const RSSI_HOLD_TIME = 15000; //  milliseconds to hold RSSI values in cache
 const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from a hub. 
@@ -134,27 +134,38 @@ function updateBeaconsAndCheckRange() {
     const currentTime = Date.now();
     const outsideRangeThreshold = currentTime - OUTSIDE_RANGE_TIME;
 
-    // Updated to use bestZone instead of bestHubId
     db.all("SELECT b.macAddress, b.bestZone, MAX(bh.timestamp) as latestTimestamp FROM beacons b JOIN beacon_history bh ON b.macAddress = bh.macAddress GROUP BY b.macAddress", [], (err, rows) => {
         if (err) {
-            console.error('Error updating beacon timestamps:', err);
+            console.error('Error getting beacons with history:', err);
             return;
         }
 
-        rows.forEach(row => {
-            db.run("UPDATE beacons SET lastUpdatedTimestamp = ? WHERE macAddress = ?", [row.latestTimestamp, row.macAddress], (updateErr) => {
-                if (updateErr) {
-                    console.error('Error updating lastUpdatedTimestamp:', updateErr);
-                }
-            });
+        db.all("SELECT macAddress FROM beacons WHERE macAddress NOT IN (SELECT macAddress FROM beacon_history)", [], (err, missingRows) => {
+            if (err) {
+                console.error('Error checking beacons without history:', err);
+                return;
+            }
 
-            // Check if the beacon is outside range
+            missingRows.forEach(row => {
+                db.run("UPDATE beacons SET bestZone = 'Outside Range' WHERE macAddress = ?", 
+                    [row.macAddress], 
+                    (updateErr) => {
+                        if (updateErr) {
+                            console.error('Error updating to Outside Range:', updateErr);
+                        }
+                    });
+            });
+        });
+
+        rows.forEach(row => {
             if (row.latestTimestamp < outsideRangeThreshold) {
-                db.run("UPDATE beacons SET bestZone = 'Outside Range' WHERE macAddress = ?", [row.macAddress], (rangeUpdateErr) => {
-                    if (rangeUpdateErr) {
-                        console.error('Error updating beacon to Outside Range:', rangeUpdateErr);
-                    }
-                });
+                db.run("UPDATE beacons SET bestZone = 'Outside Range' WHERE macAddress = ?", 
+                    [row.macAddress], 
+                    (rangeUpdateErr) => {
+                        if (rangeUpdateErr) {
+                            console.error('Error updating beacon to Outside Range:', rangeUpdateErr);
+                        }
+                    });
             }
         });
     });
