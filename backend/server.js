@@ -40,8 +40,9 @@ const DEGRADED_RSSI = -85;  // Moving average default when a beacon missing from
 const OUTSIDE_RANGE_TIME = 10 * 60 * 1000; // in milliseconds  
 
 
+// // This is insecure !!
+// app.use(PLANS_ENDPOINT, express.static(PLANS_DIR));
 
-app.use('/plans', express.static(PLANS_DIR));
 // Configure multer for image upload
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -1201,7 +1202,7 @@ app.get(PLANS_ENDPOINT, (req, res) => {
             locale_info: row.locale_info,
             floor: row.floor,
             openGround: row.open_ground,
-            imagePath: `/plans/${row.org}/${row.image_path}`,
+            imagePath: `/plans/image/${row.org}/${row.image_path.replace('.png', '')}`,
             topLeft: JSON.parse(row.top_left),
             topRight: JSON.parse(row.top_right),
             bottomLeft: JSON.parse(row.bottom_left),
@@ -1213,6 +1214,53 @@ app.get(PLANS_ENDPOINT, (req, res) => {
         }));
 
         res.json({ plans });
+    });
+});
+
+
+// Secure image serving
+
+// // Example future addition
+// const authMiddleware = (req, res, next) => {
+//     // Add your authentication logic here
+//     // For example, check JWT token
+//     const token = req.headers.authorization;
+//     if (!token) {
+//         return res.status(401).json({ error: 'Unauthorized' });
+//     }
+    
+//     // Verify token matches org
+//     const { org } = req.params;
+//     if (!verifyOrgAccess(token, org)) {
+//         return res.status(403).json({ error: 'Forbidden' });
+//     }
+    
+//     next();
+// };
+// FOR FUTURE USE
+// app.get(`${PLANS_ENDPOINT}/image/:org/:id`, authMiddleware, (req, res) => {
+app.get(`${PLANS_ENDPOINT}/image/:org/:id`, (req, res) => {
+    const { org, id } = req.params;
+    
+    // First verify the image exists in database
+    db.get('SELECT * FROM plans WHERE org = ? AND image_path = ?', 
+        [org, `${id}.png`], (err, row) => {
+            if (err || !row) {
+                return res.status(404).json({ error: 'Image not found' });
+            }
+
+            const imagePath = path.join(PLANS_DIR, org, `${id}.png`);
+            
+            // Check if file exists
+            if (!fs.existsSync(imagePath)) {
+                return res.status(404).json({ error: 'Image file not found' });
+            }
+
+            // Set content type
+            res.setHeader('Content-Type', 'image/png');
+            
+            // Stream the file
+            fs.createReadStream(imagePath).pipe(res);
     });
 });
 
