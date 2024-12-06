@@ -70,13 +70,14 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage,
     fileFilter: (req, file, cb) => {
+        console.log('Processing file:', file);
         if (file.mimetype === 'image/png') {
             cb(null, true);
         } else {
             cb(new Error('Only PNG files are allowed'));
         }
     }
-});
+}).single('image');
 
 setInterval(cleanupBeaconHistory, beacon_history_CLEANUP_INTERVAL);
 
@@ -1116,74 +1117,88 @@ app.get(TIME_TRACKING_ENDPOINT, (req, res) => {
 });
 
 // Floor Plan Endpoints
-app.post(PLANS_ENDPOINT, upload.single('image'), (req, res) => {
-
-    try{
-        const planData = JSON.parse(req.body.data);
-        const file = req.file;
-        
-        if (!file) {
-            return res.status(400).json({ error: 'No image file provided' });
+app.post(PLANS_ENDPOINT, (req, res) => {
+    upload(req, res, function(err) {
+        if (err) {
+            console.error('Multer error:', err);
+            return res.status(400).json({ error: err.message });
         }
 
-        db.serialize(() => {
-            db.run('BEGIN TRANSACTION');
+        try {
+            console.log('Received request with file:', req.file);
+            const planData = JSON.parse(req.body.data);
+            const file = req.file;
+            
+            if (!file) {
+                return res.status(400).json({ error: 'No image file provided' });
+            }
 
-            const query = `
-                INSERT INTO plans (
-                    org, locale_info, floor, open_ground, image_path,
-                    top_left, top_right, bottom_left, rotation,
-                    center, opacity, scale, dimensions
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
 
-            db.run(query, [
-                planData.org,
-                planData.locale_info,
-                planData.floor,
-                planData.openGround,
-                'temp',
-                JSON.stringify(planData.topLeft),
-                JSON.stringify(planData.topRight),
-                JSON.stringify(planData.bottomLeft),
-                planData.rotation,
-                JSON.stringify(planData.center),
-                planData.opacity,
-                planData.scale,
-                JSON.stringify(planData.dimensions)
-            ], function(err) {
-                if (err) {
-                    db.run('ROLLBACK');
-                    return res.status(500).json({ error: 'Failed to save plan data' });
-                }
+                const query = `
+                    INSERT INTO plans (
+                        org, locale_info, floor, open_ground, image_path,
+                        top_left, top_right, bottom_left, rotation,
+                        center, opacity, scale, dimensions
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
 
-                const id = this.lastID;
-                const newPath = path.join(PLANS_DIR, planData.org, `${id}.png`);
-                
-                fs.rename(file.path, newPath, (err) => {
+                const params = [
+                    planData.org,
+                    planData.locale_info,
+                    planData.floor,
+                    planData.openGround,
+                    'temp',
+                    JSON.stringify(planData.topLeft),
+                    JSON.stringify(planData.topRight),
+                    JSON.stringify(planData.bottomLeft),
+                    planData.rotation,
+                    JSON.stringify(planData.center),
+                    planData.opacity,
+                    planData.scale,
+                    JSON.stringify(planData.dimensions)
+                ];
+
+                console.log('Executing query with params:', params);
+
+                db.run(query, params, function(err) {
                     if (err) {
+                        console.error('Database insert error:', err);
                         db.run('ROLLBACK');
-                        return res.status(500).json({ error: 'Failed to save image' });
+                        return res.status(500).json({ error: 'Failed to save plan data' });
                     }
 
-                    db.run('UPDATE plans SET image_path = ? WHERE id = ?', 
-                        [`${id}.png`, id], (err) => {
+                    const id = this.lastID;
+                    const newPath = path.join(PLANS_DIR, planData.org, `${id}.png`);
+                    
+                    console.log('Moving file from', file.path, 'to', newPath);
+                    fs.rename(file.path, newPath, (err) => {
                         if (err) {
+                            console.error('File move error:', err);
                             db.run('ROLLBACK');
-                            return res.status(500).json({ error: 'Failed to update image path' });
+                            return res.status(500).json({ error: 'Failed to save image' });
                         }
 
-                        db.run('COMMIT');
-                        res.json({ id });
+                        db.run('UPDATE plans SET image_path = ? WHERE id = ?', 
+                            [`${id}.png`, id], (err) => {
+                            if (err) {
+                                console.error('Path update error:', err);
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ error: 'Failed to update image path' });
+                            }
+
+                            db.run('COMMIT');
+                            res.json({ id });
+                        });
                     });
                 });
             });
-        });
-    } catch (error) {
-        console.error('Error saving floor plan:', error);
-        res.status(400).json({ error: 'Invalid plan data' })
-    }
-
+        } catch (error) {
+            console.error('Error saving floor plan:', error);
+            res.status(400).json({ error: 'Invalid plan data' });
+        }
+    });
 });
 
 // GET endpoint

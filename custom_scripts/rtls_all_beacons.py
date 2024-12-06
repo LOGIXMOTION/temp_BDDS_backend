@@ -15,20 +15,20 @@ ZONES_CONFIG = [
     # {'name': 'Zuse', 'hubId': 'hub869B3584', 'weight': 1},
     # {'name': 'Matthias\' Room', 'hubId': 'hub869CAFEC', 'weight': 1},
     # {'name': 'Softies', 'hubId': 'hub55AA6CCC', 'weight': 1},
-    {'name': 'Embedded', 'hubId': 'hubC9BFBC90', 'weight': 1},
+    # {'name': 'Embedded', 'hubId': 'hubC9BFBC90', 'weight': 1},
 ]
 
 # Main BLE beacons
 MAIN_BLE_BEACONS = [
     'E4E1129BDC9A',
-    # 'E4E1129BDB69',
-    # 'E4E1129BDB75',
-    # 'E4E1129BDE9D',
-    # 'B09122E58408',
-    # 'F05ECD32E5F1',
-    # 'E4E1129C2810',
-    # 'E4E1129C2B71',
-    # 'B0D2781ACDD1',
+    'E4E1129BDB69',
+    'E4E1129BDB75',
+    'E4E1129BDE9D',
+    'B09122E58408',
+    'F05ECD32E5F1',
+    'E4E1129C2810',
+    'E4E1129C2B71',
+    'B0D2781ACDD1',
     # 'B0D2781ACDA3',
     # 'B0D27817DC94',
     # 'B0D27817DCAE',
@@ -51,7 +51,7 @@ MAIN_BLE_BEACONS = [
 # API endpoint
 endpoint_url = "https://api.aneeshprasobhan.xyz/data"
 
-# endpoint_url = "https://api-tracking.hard-softwerk.com/data"
+# endpoint_url = "https://api-tracking.hard-softwerk.com/data"  # DO NOT USE THIS ENDPOINT FOR TESTING
 # For local testing
 # endpoint_url = "http://localhost:3000/data"
 

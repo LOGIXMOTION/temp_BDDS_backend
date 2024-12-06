@@ -43,7 +43,7 @@ serve -s
 docker build --no-cache -t asset-tracking-server .
 
 ## Run the Docker container
-docker run -d --name asset-tracking-server --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 -p 3001:3000 -v /home/asset-tracking:/usr/src/app -v /usr/src/app/node_modules -v /home/asset-tracking-db:/usr/src/app/db -v /home/asset-tracking-plans:/usr/src/app/plans -v /etc/localtime:/etc/localtime:ro -v /etc/timezone:/etc/timezone:ro asset-tracking-server
+docker run -d --name asset-tracking-server --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 -p 3001:3000 -v /home/asset-tracking:/usr/src/app -v /usr/src/app/node_modules -v /home/asset-tracking-db:/usr/src/app/db -v /home/asset-tracking/plans:/usr/src/app/plans -v /etc/localtime:/etc/localtime:ro -v /etc/timezone:/etc/timezone:ro asset-tracking-server
 
 
 

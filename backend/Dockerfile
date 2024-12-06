@@ -9,6 +9,10 @@ WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app/db && chmod 777 /usr/src/app/db
 RUN mkdir -p /usr/src/app/plans && chmod 777 /usr/src/app/plans
 
+RUN mkdir -p /usr/src/app/plans && \
+    chown -R node:node /usr/src/app/plans && \
+    chmod -R 755 /usr/src/app/plans
+    
 # Set the timezone to Europe/Berlin
 ENV TZ=Europe/Berlin
 
